@@ -8,10 +8,13 @@ Steps:
 *Step 3*: Split the XML files into individual patents:
 
 ```bash
-csplit -f 'patent-' -b '%02d.xml' <filename>.xml '/^<?xml /' '{*}'`
+mkdir <foldername>
+csplit -f '<foldername>/patent-' -b '%02d.xml' <filename>.xml '/^<?xml /' '{*}'`
 ```
 
 This wills plit the file into their individual patents.
+
+Recommend setting foldername to the date of the patent, e.g.: `2002-01-01/`
 
 This was taken from: https://stackoverflow.com/questions/55885078/parsing-uspto-xml-files
 
