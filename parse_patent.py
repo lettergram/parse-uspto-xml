@@ -11,11 +11,9 @@ print(xml_tree)
 
 
 
-filename = '20020101/patent-1888.xml'
+filename = '2007/patent-6296.xml'
 
 xml_text = html.unescape(open(filename, 'r').read())
-xml_text = xml_text.replace("&", "and")
-xml_text = xml_text.replace("+", "")
 
 print(type(xml_text))
 count = 1
@@ -23,14 +21,11 @@ for line in xml_text.split("\n"):
     
     print(count, line)
     count += 1
-    if count == 371:
-        subcount = 0
-        for char in line:
-            subcount += 1
-            if subcount > 820 and subcount < 850:
-                print(subcount, char)
-        break
 
 
 xml_tree = etree.fromstring(xml_text, etree.XMLParser(encoding='utf-8'))
 print(xml_tree)
+
+for child in xml_tree.findall('us-patent-application'):
+    print(child.attrib)
+
