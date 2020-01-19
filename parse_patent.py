@@ -2,10 +2,10 @@ import os
 import html
 from bs4 import BeautifulSoup
 
-test_filename = '2007/patent-4002.xml'
+test_filename = '2007/patent-1951.xml'
 directory = '2007'
 
-def parse_uspto_file(filename):
+def parse_uspto_file(filename, logging=False):
     
     xml_text = html.unescape(open(filename, 'r').read())
 
@@ -17,66 +17,102 @@ def parse_uspto_file(filename):
     """
     
     bs = BeautifulSoup(xml_text)
-
-    print(bs.prettify())
-    print("Filename:", filename)
-    print("\n\n")
-    print("\n--------------------------------------------------------\n")
-
-    publication_title = bs.find('invention-title').text
-    print("USPTO Invention Title:", publication_title)
-
-    publication_num = bs.find('us-patent-application')['file'].split("-")[0]
-    print("USPTO Publication Number:", publication_num)
-
-    publication_date = bs.find('publication-reference').find('date').text
-    print("USPTO Publication Date:", publication_date)
-
-    application_type = bs.find('application-reference')['appl-type']
-    print("USPTO Application Type:", application_type)
     
-    count = 1
+    publication_title = bs.find('invention-title').text
+    publication_num = bs.find('us-patent-application')['file'].split("-")[0]
+    publication_date = bs.find('publication-reference').find('date').text
+    application_type = bs.find('application-reference')['appl-type']
+
+    classifications = []
     for classes in bs.find_all('classifications-ipcr'):
         for el in classes.find_all('classification-ipcr'):        
             classification  = el.find('section').text
             classification += el.find('class').text
             classification += el.find('subclass').text
-            print("USPTO Classification #"+str(count)+":", classification)        
-            count += 1
-        
-    print("\n")
-        
-    count = 1
+            classifications.append(classification)
+
+    authors = []
     for parties in bs.find_all('parties'):
         for applicants in parties.find_all('applicants'):
             for el in applicants.find_all('addressbook'):
                 first_name = el.find('first-name').text
                 last_name = el.find('last-name').text
-                print("Inventor #"+str(count)+":", first_name, last_name)
-                count += 1
+                authors.append(first_name + " " + last_name)
 
-    print("\n--------------------------------------------------------\n")
-    
+    abstracts = []
     for el in bs.find_all('abstract'):
-        print("Abstract:", el.text)
-
+        abstracts.append(el.text)
+    
+    descriptions = []
     for el in bs.find_all('description'):
-        print("Description:", el.text)
-
+        descriptions.append(el.text)
+        
+    claims = []
     for el in bs.find_all('claim'):
-        print(el.text)
+        claims.append(el.text)
+    
+    if logging:
+        
+        # print(bs.prettify())
+        
+        print("Filename:", filename)
+        print("\n\n")
+        print("\n--------------------------------------------------------\n")
+
+        print("USPTO Invention Title:", publication_title)
+        print("USPTO Publication Number:", publication_num)
+        print("USPTO Publication Date:", publication_date)
+        print("USPTO Application Type:", application_type)
+            
+        count = 1
+        for classification in classifications:
+            print("USPTO Classification #"+str(count)+": " + classification)
+            count += 1
+        print("\n")
+        
+        count = 1
+        for author in authors:
+            print("Inventor #"+str(count)+": " + author)
+            count += 1
+
+        print("\n--------------------------------------------------------\n")
+
+        print("Abstract:\n-----------------------------------------------")
+        for abstract in abstracts:
+            print(abstract)
+
+        print("Description:\n-----------------------------------------------")
+        for description in descriptions:
+            print(description)
+
+        print("Claims:\n-----------------------------------------------")
+        for claim in claims:
+            print(claim)
 
 
+parse_uspto_file(test_filename, logging=True)
 
+success = []
 errors = []
+file_count = len(os.listdir(directory))
 for filename in os.listdir(directory):
     if filename.endswith('.xml'):
         try:
-            parse_uspto_file(directory + "/" + filename)
+            parse_uspto_file(directory+"/"+filename)
+            success.append(directory+"/"+filename)
         except Exception as e:
-            errors.append(e)
+            errors.append((directory+"/"+filename, e))
+
+        if (len(success)+len(errors)) % 10 == 0:
+            print(
+                "Total", len(success)+len(errors),
+                "of", file_count,
+                "-",
+                "Success", len(success),
+                "Errors", len(errors)
+            )
 
 print("Errors")
 for e in errors:
     print(e)
-print("Error Count:", len(e))
+print("Error Count:", len(errors))
