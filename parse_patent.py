@@ -115,4 +115,6 @@ for filename in os.listdir(directory):
 print("Errors")
 for e in errors:
     print(e)
+    
+print("Success Count:", len(success))
 print("Error Count:", len(errors))
