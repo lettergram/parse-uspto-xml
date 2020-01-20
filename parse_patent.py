@@ -2,24 +2,20 @@ import os
 import html
 from bs4 import BeautifulSoup
 
-test_filename = '2007/patent-1951.xml'
-directory = '2007'
-
-def parse_uspto_file(filename, logging=False):
-    
-    xml_text = html.unescape(open(filename, 'r').read())
-
-    count = 1
+def parse_uspto_file(bs, logging=False):
     """
+    Parses a USPTO patent in a BeautifulSoup object.
+    """
+    
+    """
+    count = 1
     for line in xml_text.split("\n"):    
         print(count, line)
         count += 1
     """
-    
-    bs = BeautifulSoup(xml_text)
-    
+
     publication_title = bs.find('invention-title').text
-    publication_num = bs.find('us-patent-application')['file'].split("-")[0]
+    publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
     application_type = bs.find('application-reference')['appl-type']
 
@@ -90,27 +86,38 @@ def parse_uspto_file(filename, logging=False):
             print(claim)
 
 
-parse_uspto_file(test_filename, logging=True)
+filename = "ipa200109.xml"
 
-success = []
-errors = []
-file_count = len(os.listdir(directory))
-for filename in os.listdir(directory):
-    if filename.endswith('.xml'):
-        try:
-            parse_uspto_file(directory+"/"+filename)
-            success.append(directory+"/"+filename)
-        except Exception as e:
-            errors.append((directory+"/"+filename, e))
+xml_text = html.unescape(open(filename, 'r').read())
 
-        if (len(success)+len(errors)) % 10 == 0:
-            print(
-                "Total", len(success)+len(errors),
-                "of", file_count,
-                "-",
-                "Success", len(success),
-                "Errors", len(errors)
-            )
+count = 1
+success, errors = [], []
+for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
+
+    if patent is None or patent == "":
+        continue
+    
+    bs = BeautifulSoup(patent)
+    
+    application = bs.find('us-patent-application')
+    title = "None"
+    
+    try:
+        title = application.find('invention-title').text
+    except Exception as e:
+        print(e)
+
+    try:
+        parse_uspto_file(application)
+        success.append(title)
+    except Exception as e:
+        exception_tuple = (count, title, e)
+        errors.append(exception_tuple)
+       
+    if (len(success)+len(errors)) % 70 == 0:
+        print(count, title)        
+    count += 1
+
 
 print("Errors")
 for e in errors:
