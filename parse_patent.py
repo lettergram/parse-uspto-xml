@@ -1,4 +1,5 @@
-import os 
+import os
+import sys
 import html
 from bs4 import BeautifulSoup
 
@@ -86,37 +87,43 @@ def parse_uspto_file(bs, logging=False):
             print(claim)
 
 
-filename = "ipa200109.xml"
+filenames = ["ipa200109.xml"]
+if len(sys.argv) > 1:
+    filenames = sys.argv[1:]
 
-xml_text = html.unescape(open(filename, 'r').read())
-
-count = 1
-success, errors = [], []
-for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
-
-    if patent is None or patent == "":
-        continue
+print(filenames)
     
-    bs = BeautifulSoup(patent)
-    
-    application = bs.find('us-patent-application')
-    title = "None"
-    
-    try:
-        title = application.find('invention-title').text
-    except Exception as e:
-        print(e)
+for filename in filenames:
+    if ".xml" in filename:
+        xml_text = html.unescape(open(filename, 'r').read())
 
-    try:
-        parse_uspto_file(application)
-        success.append(title)
-    except Exception as e:
-        exception_tuple = (count, title, e)
-        errors.append(exception_tuple)
+        count = 1
+        success, errors = [], []
+        for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
+
+            if patent is None or patent == "":
+                continue
+    
+            bs = BeautifulSoup(patent)
+    
+            application = bs.find('us-patent-application')
+            title = "None"
+    
+            try:
+                title = application.find('invention-title').text
+            except Exception as e:
+                print("Error", count, e)
+
+            try:
+                parse_uspto_file(application)
+                success.append(title)
+            except Exception as e:
+                exception_tuple = (count, title, e)
+                errors.append(exception_tuple)
        
-    if (len(success)+len(errors)) % 70 == 0:
-        print(count, title)        
-    count += 1
+            if (len(success)+len(errors)) % 70 == 0:
+                print(count, title)                
+            count += 1
 
 
 print("Errors")
