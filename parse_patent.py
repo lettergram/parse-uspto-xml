@@ -92,13 +92,13 @@ if len(sys.argv) > 1:
     filenames = sys.argv[1:]
 
 print(filenames)
-    
+
+count = 1
+success, errors = [], []
 for filename in filenames:
     if ".xml" in filename:
         xml_text = html.unescape(open(filename, 'r').read())
 
-        count = 1
-        success, errors = [], []
         for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
 
             if patent is None or patent == "":

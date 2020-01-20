@@ -19,7 +19,7 @@ The current script(s) only work on version 4.0 or higher of the XML (2005 - Pres
 *Step 3*: Individual patents can then be parsed with:
 
 ```python
-parse_patent.py
+parse_patent.py <filename.xml> <filename.xml>
 ```
 
 You can edit the `filename` variable in the python file `parse_patent.py` to match the unzipped file. Inside that file are typically thousands of patents which can be parsed for the given week.
