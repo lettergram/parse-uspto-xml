@@ -1,5 +1,5 @@
 Parse USPTO
-===========
+65;5803;1c===========
 
 **Step 1**: Download XML patents: https://bulkdata.uspto.gov/
 
@@ -7,7 +7,9 @@ Download under the header:
 
 ```
 Patent Application Full Text Data (No Images) (MAR 15, 2001 - PRESENT)
-Contains the full text of each patent application (non-provisional utility and plant) published weekly (Thursdays) from March 15, 2001 to present (excludes images/drawings). Subset of the Patent Application Full Text Data with Embedded TIFF Images.
+Contains the full text of each patent application (non-provisional utility and plant)
+published weekly (Thursdays) from March 15, 2001 to present (excludes images/drawings).
+Subset of the Patent Application Full Text Data with Embedded TIFF Images.
 ```
 
 The current script(s) only work on version 4.0 or higher of the XML (2005 - Present).
