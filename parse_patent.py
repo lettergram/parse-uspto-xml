@@ -87,11 +87,24 @@ def parse_uspto_file(bs, logging=False):
             print(claim)
 
 
-filenames = ["ipa200109.xml"]
+arg_filenames = []
 if len(sys.argv) > 1:
-    filenames = sys.argv[1:]
+    arg_filenames = sys.argv[1:]
 
-print(filenames)
+filenames = []
+for filename in arg_filenames:
+    # Load listed directories
+    if filename[-1] == "/":
+        for dir_filename in os.listdir(filename):
+            filenames.append(filename + dir_filename)
+    # Load listed files
+    if ".xml" in filename:
+        filenames.append(filename)
+
+print("LOADING FILES TO PARSE\n----------------------------")
+for filename in filenames:
+    print(filename)
+    
 
 count = 1
 success, errors = [], []
@@ -105,13 +118,18 @@ for filename in filenames:
                 continue
     
             bs = BeautifulSoup(patent)
+
+            if bs.find('sequence-cwu') is not None:
+                continue # Skip DNA sequence documents
     
             application = bs.find('us-patent-application')
+            if application is None:
+                application = bs.find('us-patent-grant')
             title = "None"
     
             try:
                 title = application.find('invention-title').text
-            except Exception as e:
+            except Exception as e:                
                 print("Error", count, e)
 
             try:
@@ -120,9 +138,10 @@ for filename in filenames:
             except Exception as e:
                 exception_tuple = (count, title, e)
                 errors.append(exception_tuple)
+                print(exception_tuple)
        
             if (len(success)+len(errors)) % 70 == 0:
-                print(count, title)                
+                print(count, filename, title)
             count += 1
 
 
