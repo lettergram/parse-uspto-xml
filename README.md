@@ -1,5 +1,5 @@
 Parse USPTO
-65;5803;1c===========
+===========
 
 **Step 1**: Download XML patents: https://bulkdata.uspto.gov/
 
