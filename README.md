@@ -14,6 +14,8 @@ Subset of the Patent Application Full Text Data with Embedded TIFF Images.
 
 The current script(s) only work on version 4.0 or higher of the XML (2005 - Present).
 
+It also will skip all documents with DNA sequences.
+
 **Step 2**: Extract the ziped file: `*.xml`
 
 **Step 3**: Individual patents (or directories) can then be parsed with:
