@@ -94,7 +94,7 @@ if len(sys.argv) > 1:
 filenames = []
 for filename in arg_filenames:
     # Load listed directories
-    if filename[-1] == "/":
+    if os.path.isdir(filename):
         for dir_filename in os.listdir(filename):
             filenames.append(filename + dir_filename)
     # Load listed files
