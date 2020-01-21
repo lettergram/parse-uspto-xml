@@ -1,9 +1,7 @@
 Parse USPTO
 ===========
 
-Steps:
-
-*Step 1*: Download XML patents: https://bulkdata.uspto.gov/
+**Step 1**: Download XML patents: https://bulkdata.uspto.gov/
 
 Download under the header:
 
@@ -14,9 +12,9 @@ Contains the full text of each patent application (non-provisional utility and p
 
 The current script(s) only work on version 4.0 or higher of the XML (2005 - Present).
 
-*Step 2*: Extract the ziped file: `*.xml`
+**Step 2**: Extract the ziped file: `*.xml`
 
-*Step 3*: Individual patents (or directories) can then be parsed with:
+**Step 3**: Individual patents (or directories) can then be parsed with:
 
 ```python
 parse_patent.py <filename.xml> <filename.xml> <directory>
