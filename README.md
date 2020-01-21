@@ -24,4 +24,4 @@ parse_patent.py <filename.xml> <filename.xml> <directory>
 
 You can edit the `filename` variable in the python file `parse_patent.py` to match the unzipped file. Inside that file are typically thousands of patents which can be parsed for the given week.
 
-Using the `parse_patent.py` if you add a directory with a `/` at the end all the .xml files will be loaded as well. 
+Using the `parse_patent.py` if you add a it will load all the  .xml files.
