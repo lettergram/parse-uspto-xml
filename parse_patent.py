@@ -3,16 +3,18 @@ import sys
 import html
 from bs4 import BeautifulSoup
 
+def print_lines(text):
+    """
+    Prints line by line, with the line number
+    """
+    count = 1
+    for line in text.split("\n"):    
+        print(count, line)
+        count += 1    
+
 def parse_uspto_file(bs, logging=False):
     """
     Parses a USPTO patent in a BeautifulSoup object.
-    """
-    
-    """
-    count = 1
-    for line in xml_text.split("\n"):    
-        print(count, line)
-        count += 1
     """
 
     publication_title = bs.find('invention-title').text
@@ -96,7 +98,11 @@ for filename in arg_filenames:
     # Load listed directories
     if os.path.isdir(filename):
         for dir_filename in os.listdir(filename):
-            filenames.append(filename + dir_filename)
+            directory = filename
+            if directory[-1] != "/":
+                directory += "/"
+            filenames.append(directory + dir_filename)                
+                
     # Load listed files
     if ".xml" in filename:
         filenames.append(filename)
@@ -105,13 +111,13 @@ print("LOADING FILES TO PARSE\n----------------------------")
 for filename in filenames:
     print(filename)
     
-
 count = 1
 success, errors = [], []
 for filename in filenames:
     if ".xml" in filename:
+        
         xml_text = html.unescape(open(filename, 'r').read())
-
+        
         for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
 
             if patent is None or patent == "":
@@ -123,7 +129,7 @@ for filename in filenames:
                 continue # Skip DNA sequence documents
     
             application = bs.find('us-patent-application')
-            if application is None:
+            if application is None: # If no application, search for grant
                 application = bs.find('us-patent-grant')
             title = "None"
     
