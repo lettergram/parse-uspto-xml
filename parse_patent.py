@@ -12,7 +12,7 @@ def print_lines(text):
         print(count, line)
         count += 1    
 
-def parse_uspto_file(bs, logging=True):
+def parse_uspto_file(bs, logging=False):
     """
     Parses a USPTO patent in a BeautifulSoup object.
     """
