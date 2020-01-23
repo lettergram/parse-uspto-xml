@@ -12,7 +12,7 @@ def print_lines(text):
         print(count, line)
         count += 1    
 
-def parse_uspto_file(bs, logging=False):
+def parse_uspto_file(bs, logging=True):
     """
     Parses a USPTO patent in a BeautifulSoup object.
     """
@@ -40,16 +40,16 @@ def parse_uspto_file(bs, logging=False):
 
     abstracts = []
     for el in bs.find_all('abstract'):
-        abstracts.append(el.text)
+        abstracts.append(el.text.strip('\n'))
     
     descriptions = []
     for el in bs.find_all('description'):
-        descriptions.append(el.text)
+        descriptions.append(el.text.strip('\n'))
         
     claims = []
     for el in bs.find_all('claim'):
-        claims.append(el.text)
-    
+        claims.append(el.text.strip('\n'))
+        
     if logging:
         
         # print(bs.prettify())
