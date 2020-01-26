@@ -1,3 +1,4 @@
+import pprint
 import os
 import sys
 import html
@@ -16,20 +17,29 @@ def parse_uspto_file(bs, logging=False):
     """
     Parses a USPTO patent in a BeautifulSoup object.
     """
-
+    
     publication_title = bs.find('invention-title').text
     publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
     application_type = bs.find('application-reference')['appl-type']
 
+
+    classifications_without_groups = {}
     classifications = []
     for classes in bs.find_all('classifications-ipcr'):
-        for el in classes.find_all('classification-ipcr'):        
+        for el in classes.find_all('classification-ipcr'):
+            
             classification  = el.find('section').text
             classification += el.find('class').text
             classification += el.find('subclass').text
-            classifications.append(classification)
+            
+            group = el.find('main-group').text + "/"
+            group += el.find('subgroup').text
 
+            classifications_without_groups[classification] = True
+            
+            classifications.append(classification + " " + group)
+            
     authors = []
     for parties in bs.find_all('parties'):
         for applicants in parties.find_all('applicants'):
@@ -49,6 +59,19 @@ def parse_uspto_file(bs, logging=False):
     claims = []
     for el in bs.find_all('claim'):
         claims.append(el.text.strip('\n'))
+
+    uspto_patent = {
+        "publication_title": publication_title,
+        "publication_number": publication_num,
+        "publication_date": publication_date,
+        "application_type": application_type,
+        "authors": authors,
+        "classifications_without_groups": list(classifications_without_groups.keys()),
+        "classifications": classifications,
+        "abstract": abstracts,
+        "descriptions": descriptions,
+        "claims": claims
+    }
         
     if logging:
         
@@ -88,6 +111,30 @@ def parse_uspto_file(bs, logging=False):
         for claim in claims:
             print(claim)
 
+    title = "Shower shield system for bathroom shower drain areaways"
+    if bs.find('invention-title').text == title:
+        print(bs)
+        exit()
+
+            
+    return uspto_patent
+
+
+def write_to_db(uspto_patent):
+    
+    # pp = pprint.PrettyPrinter(indent=2)
+
+    for key in uspto_patent:
+        if type(uspto_patent[key]) == list:
+            if key == "classifications":
+                print("\n--------------------------------")
+                print(uspto_patent['publication_title'])
+                print(uspto_patent['publication_number'])
+                print(uspto_patent['classifications_without_groups'])
+                print(uspto_patent['classifications'])
+                print("--------------------------------")
+    
+    
 
 arg_filenames = []
 if len(sys.argv) > 1:
@@ -110,7 +157,7 @@ for filename in arg_filenames:
 print("LOADING FILES TO PARSE\n----------------------------")
 for filename in filenames:
     print(filename)
-    
+
 count = 1
 success, errors = [], []
 for filename in filenames:
@@ -135,11 +182,12 @@ for filename in filenames:
     
             try:
                 title = application.find('invention-title').text
-            except Exception as e:                
+            except Exception as e:          
                 print("Error", count, e)
 
             try:
-                parse_uspto_file(application)
+                uspto_patent = parse_uspto_file(application)
+                write_to_db(uspto_patent)
                 success.append(title)
             except Exception as e:
                 exception_tuple = (count, title, e)
