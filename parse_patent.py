@@ -24,6 +24,8 @@ def parse_uspto_file(bs, logging=False):
     application_type = bs.find('application-reference')['appl-type']
 
 
+    # International Patent Classification (IPC) Docs:
+    # https://www.wipo.int/classifications/ipc/en/
     sections = {}
     section_classes = {}
     section_class_subclasses = {}
@@ -32,8 +34,7 @@ def parse_uspto_file(bs, logging=False):
         for el in classes.find_all('classification-ipcr'):
 
             section = el.find('section').text
-            
-            
+                        
             classification  = section
             classification += el.find('class').text
             classification += el.find('subclass').text
