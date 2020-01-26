@@ -24,21 +24,27 @@ def parse_uspto_file(bs, logging=False):
     application_type = bs.find('application-reference')['appl-type']
 
 
-    classifications_without_groups = {}
-    classifications = []
+    sections = {}
+    section_classes = {}
+    section_class_subclasses = {}
+    section_class_subclass_groups = {}
     for classes in bs.find_all('classifications-ipcr'):
         for el in classes.find_all('classification-ipcr'):
+
+            section = el.find('section').text
             
-            classification  = el.find('section').text
+            
+            classification  = section
             classification += el.find('class').text
             classification += el.find('subclass').text
             
             group = el.find('main-group').text + "/"
             group += el.find('subgroup').text
 
-            classifications_without_groups[classification] = True
-            
-            classifications.append(classification + " " + group)
+            sections[section] = True
+            section_classes[section+el.find('class').text] = True
+            section_class_subclasses[classification] = True
+            section_class_subclass_groups[classification+" "+group] = True
             
     authors = []
     for parties in bs.find_all('parties'):
@@ -66,8 +72,10 @@ def parse_uspto_file(bs, logging=False):
         "publication_date": publication_date,
         "application_type": application_type,
         "authors": authors,
-        "classifications_without_groups": list(classifications_without_groups.keys()),
-        "classifications": classifications,
+        "sections": list(sections.keys()),
+        "section_classes": list(section_classes.keys()),
+        "section_class_subclasses": list(section_class_subclasses.keys()),
+        "section_class_subclass_groups": list(section_class_subclass_groups.keys()),
         "abstract": abstracts,
         "descriptions": descriptions,
         "claims": claims
@@ -87,7 +95,7 @@ def parse_uspto_file(bs, logging=False):
         print("USPTO Application Type:", application_type)
             
         count = 1
-        for classification in classifications:
+        for classification in section-class_subclass_groups:
             print("USPTO Classification #"+str(count)+": " + classification)
             count += 1
         print("\n")
@@ -126,12 +134,14 @@ def write_to_db(uspto_patent):
 
     for key in uspto_patent:
         if type(uspto_patent[key]) == list:
-            if key == "classifications":
+            if key == "section_class_subclass_groups":
                 print("\n--------------------------------")
                 print(uspto_patent['publication_title'])
                 print(uspto_patent['publication_number'])
-                print(uspto_patent['classifications_without_groups'])
-                print(uspto_patent['classifications'])
+                print(uspto_patent['sections'])
+                print(uspto_patent['section_classes'])
+                print(uspto_patent['section_class_subclasses'])
+                print(uspto_patent['section_class_subclass_groups'])
                 print("--------------------------------")
     
     
