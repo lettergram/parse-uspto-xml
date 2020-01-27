@@ -27,3 +27,9 @@ parse_patent.py <filename.xml> <filename.xml> <directory>
 You can edit the `filename` variable in the python file `parse_patent.py` to match the unzipped file. Inside that file are typically thousands of patents which can be parsed for the given week.
 
 Using the `parse_patent.py` if you add a it will load all the  .xml files.
+
+## Storing in Database
+
+In addition, it's possible to save the parsed data in a database. In this repository, we provide documentation in [config/README](config/README.md) to configure PostgreSQL to store and search the patents.
+
+This reduces the size of a file `ipa200109.xml` of *734MB* to *154MB* (in the database). 

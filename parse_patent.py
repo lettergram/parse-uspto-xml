@@ -2,7 +2,15 @@ import pprint
 import os
 import sys
 import html
+import datetime
+
 from bs4 import BeautifulSoup
+
+utils_path = os.path.abspath('utils')
+sys.path.append(utils_path)
+
+# load the psycopg to connect to postgresql
+from db_interface import PGDBInterface
 
 def print_lines(text):
     """
@@ -72,14 +80,14 @@ def parse_uspto_file(bs, logging=False):
         "publication_number": publication_num,
         "publication_date": publication_date,
         "application_type": application_type,
-        "authors": authors,
+        "authors": authors, # list
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
         "section_class_subclasses": list(section_class_subclasses.keys()),
         "section_class_subclass_groups": list(section_class_subclass_groups.keys()),
-        "abstract": abstracts,
-        "descriptions": descriptions,
-        "claims": claims
+        "abstract": abstracts, # list
+        "descriptions": descriptions, # list
+        "claims": claims # list
     }
         
     if logging:
@@ -129,22 +137,91 @@ def parse_uspto_file(bs, logging=False):
     return uspto_patent
 
 
-def write_to_db(uspto_patent):
-    
-    # pp = pprint.PrettyPrinter(indent=2)
+def write_to_db(uspto_patent, db=None):    
 
+    """
+    pp = pprint.PrettyPrinter(indent=2)
     for key in uspto_patent:
         if type(uspto_patent[key]) == list:
             if key == "section_class_subclass_groups":
                 print("\n--------------------------------")
                 print(uspto_patent['publication_title'])
                 print(uspto_patent['publication_number'])
+                print(uspto_patent['publication_date'])
                 print(uspto_patent['sections'])
                 print(uspto_patent['section_classes'])
                 print(uspto_patent['section_class_subclasses'])
                 print(uspto_patent['section_class_subclass_groups'])
                 print("--------------------------------")
+    """
+
+    # Will use for created_at & updated_at time
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+    # INSERTS INTO DB
+    uspto_db_entry = [
+        uspto_patent['publication_title'],
+        uspto_patent['publication_number'],
+        uspto_patent['publication_date'],
+        uspto_patent['application_type'],
+        ','.join(uspto_patent['authors']),
+        ','.join(uspto_patent['sections']),
+        ','.join(uspto_patent['section_classes']),
+        ','.join(uspto_patent['section_class_subclasses']),
+        ','.join(uspto_patent['section_class_subclass_groups']),
+        '\n'.join(uspto_patent['abstract']),
+        '\n'.join(uspto_patent['descriptions']),
+        '\n'.join(uspto_patent['claims']),
+        current_time,
+        current_time
+    ]
+
+    # ON CONFLICT UPDATES TO DB
+    uspto_db_entry += [
+        uspto_patent['publication_title'],
+        uspto_patent['publication_date'],
+        uspto_patent['application_type'],
+        ','.join(uspto_patent['authors']),
+        ','.join(uspto_patent['sections']),
+        ','.join(uspto_patent['section_classes']),
+        ','.join(uspto_patent['section_class_subclasses']),
+        ','.join(uspto_patent['section_class_subclass_groups']),
+        '\n'.join(uspto_patent['abstract']),
+        '\n'.join(uspto_patent['descriptions']),
+        '\n'.join(uspto_patent['claims']),
+        current_time
+    ]
+
+    db_cursor = None
+    if db is not None:
+        db_cursor = db.obtain_db_cursor()
     
+    if db_cursor is not None:
+
+        db_cursor.execute("INSERT INTO uspto_patents ("
+                          + "publication_title, publication_number, "
+                          + "publication_date, publication_type, " 
+                          + "authors, sections, section_classes, " 
+                          + "section_class_subclasses, "
+                          + "section_class_subclass_groups, "
+                          + "abstract, description, claims, "
+                          + "created_at, updated_at"
+                          + ") VALUES ("
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, "
+                          + "%s, %s, %s, %s, %s, %s) "
+                          + "ON CONFLICT(publication_number) "
+                          + "DO UPDATE SET "
+                          + "publication_title=%s, "
+                          + "publication_date=%s, "
+                          + "publication_type=%s, "
+                          + "authors=%s, "
+                          + "sections=%s, section_classes=%s, "
+                          + "section_class_subclasses=%s, "
+                          + "section_class_subclass_groups=%s, "
+                          + "abstract=%s, description=%s, "
+                          + "claims=%s, updated_at=%s", uspto_db_entry)
+
+    return 
     
 
 arg_filenames = []
@@ -169,6 +246,11 @@ print("LOADING FILES TO PARSE\n----------------------------")
 for filename in filenames:
     print(filename)
 
+
+db_config_file = "config/postgres.tsv"
+db = PGDBInterface(config_file=db_config_file)
+# db.silent_logging = True
+    
 count = 1
 success, errors = [], []
 for filename in filenames:
@@ -198,15 +280,16 @@ for filename in filenames:
 
             try:
                 uspto_patent = parse_uspto_file(application)
-                write_to_db(uspto_patent)
+                write_to_db(uspto_patent, db=db)
                 success.append(title)
             except Exception as e:
                 exception_tuple = (count, title, e)
                 errors.append(exception_tuple)
                 print(exception_tuple)
        
-            if (len(success)+len(errors)) % 70 == 0:
+            if (len(success)+len(errors)) % 50 == 0:
                 print(count, filename, title)
+                db.commit_to_db()
             count += 1
 
 
