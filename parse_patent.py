@@ -232,6 +232,7 @@ filenames = []
 for filename in arg_filenames:
     # Load listed directories
     if os.path.isdir(filename):
+        print("directory", filename)
         for dir_filename in os.listdir(filename):
             directory = filename
             if directory[-1] != "/":
@@ -249,10 +250,11 @@ for filename in filenames:
 
 db_config_file = "config/postgres.tsv"
 db = PGDBInterface(config_file=db_config_file)
-# db.silent_logging = True
+db.silent_logging = True
     
 count = 1
-success, errors = [], []
+success_count = 0
+errors = []
 for filename in filenames:
     if ".xml" in filename:
         
@@ -281,21 +283,21 @@ for filename in filenames:
             try:
                 uspto_patent = parse_uspto_file(application)
                 write_to_db(uspto_patent, db=db)
-                success.append(title)
+                success_count += 1
             except Exception as e:
                 exception_tuple = (count, title, e)
                 errors.append(exception_tuple)
                 print(exception_tuple)
        
-            if (len(success)+len(errors)) % 50 == 0:
+            if (success_count+len(errors)) % 50 == 0:
                 print(count, filename, title)
                 db.commit_to_db()
             count += 1
 
 
-print("Errors")
+print("\n\nErrors\n------------------------\n")
 for e in errors:
     print(e)
     
-print("Success Count:", len(success))
+print("Success Count:", success_count)
 print("Error Count:", len(errors))
