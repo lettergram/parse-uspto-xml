@@ -2,25 +2,26 @@ import os
 import csv
 import ast
 
-# load the psycopg to connect to postgresql       
+# load the psycopg to connect to postgresql
 import psycopg2
 import psycopg2.extras
+
 
 class PGDBInterface:
 
     def __init__(self, check_environment=True,
                  config_file="../config/postgres.tsv",
                  set_remote=False, silent_logging=False):
-        
+
         self.conn           = None
         self.cursor         = None
         self.set_remote     = set_remote
         self.silent_logging = silent_logging
-        
+
         self.create_db_connection(check_environment, config_file)
-        
+
         # Ensures immediate commits, not waiting for transactions
-        self.conn.autocommit = True 
+        self.conn.autocommit = True
 
 
     def create_db_connection(self, check_environment=True,
@@ -29,11 +30,11 @@ class PGDBInterface:
         Attempt to create a postgresql database connection
         :param check_environment: Checks the environment variables for
                                   DATABASE_HOST, DATABASE_PORT, etc.
-        :param config_file: The configuration file used as back up to 
+        :param config_file: The configuration file used as back up to
                             the environment variables, or as primary if
                             check environment is not set.
         """
-        
+
         remote = self.set_remote
 
         # Check if database parameters in environment
@@ -72,8 +73,8 @@ class PGDBInterface:
 
             if not self.silent_logging:
                 print("\nUsing Config File for Database\n")
-            
-            # Find the database parameters, remote and local databases     
+
+            # Find the database parameters, remote and local databases
             with open(config_file, 'r') as tsvfile:
                 r = csv.reader(tsvfile, delimiter='\t')
                 count = 0
@@ -84,11 +85,11 @@ class PGDBInterface:
                         params = ast.literal_eval(row[1])
         else:
             if not self.silent_logging:
-                print("Using Environment Variables for Database")            
+                print("Using Environment Variables for Database")
 
-        # Try to connect to database    
+        # Try to connect to database
         try:
-            
+
             if remote:
                 if not self.silent_logging:
                     print("Connecting to remote database")
@@ -113,7 +114,7 @@ class PGDBInterface:
 
         print("Connected to database")
         self.cursor = self.conn.cursor()
-    
+
     def obtain_db_connection(self):
         return self.conn
 
@@ -127,17 +128,17 @@ class PGDBInterface:
         self.conn.commit()
 
     def close_db_connection(self):
-        
+
         # Close communication with the database
         if not self.silent_logging:
-            print("Closing cursor")        
+            print("Closing cursor")
         self.cursor.close()
-        
+
         if not self.silent_logging:
-            print("Closing connection")            
+            print("Closing connection")
         self.conn.close()
-        
+
         self.cursor  = None
         self.conn    = None
-        
+
         print("Disconnected from database")

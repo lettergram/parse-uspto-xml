@@ -1,8 +1,8 @@
-import pprint
-import os
-import sys
-import html
 import datetime
+import html
+import os
+import re
+import sys
 
 from bs4 import BeautifulSoup
 
@@ -12,20 +12,21 @@ sys.path.append(utils_path)
 # load the psycopg to connect to postgresql
 from db_interface import PGDBInterface
 
+
 def print_lines(text):
     """
     Prints line by line, with the line number
     """
     count = 1
-    for line in text.split("\n"):    
+    for line in text.split("\n"):
         print(count, line)
-        count += 1    
+        count += 1
 
 def parse_uspto_file(bs, logging=False):
     """
     Parses a USPTO patent in a BeautifulSoup object.
     """
-    
+
     publication_title = bs.find('invention-title').text
     publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
@@ -42,11 +43,11 @@ def parse_uspto_file(bs, logging=False):
         for el in classes.find_all('classification-ipcr'):
 
             section = el.find('section').text
-                        
+
             classification  = section
             classification += el.find('class').text
             classification += el.find('subclass').text
-            
+
             group = el.find('main-group').text + "/"
             group += el.find('subgroup').text
 
@@ -54,10 +55,10 @@ def parse_uspto_file(bs, logging=False):
             section_classes[section+el.find('class').text] = True
             section_class_subclasses[classification] = True
             section_class_subclass_groups[classification+" "+group] = True
-            
+
     authors = []
-    for parties in bs.find_all('parties'):
-        for applicants in parties.find_all('applicants'):
+    for parties in bs.find_all(re.compile('^.*parties')):
+        for applicants in parties.find_all(re.compile('inventors')):
             for el in applicants.find_all('addressbook'):
                 first_name = el.find('first-name').text
                 last_name = el.find('last-name').text
@@ -66,11 +67,11 @@ def parse_uspto_file(bs, logging=False):
     abstracts = []
     for el in bs.find_all('abstract'):
         abstracts.append(el.text.strip('\n'))
-    
+
     descriptions = []
     for el in bs.find_all('description'):
         descriptions.append(el.text.strip('\n'))
-        
+
     claims = []
     for el in bs.find_all('claim'):
         claims.append(el.text.strip('\n'))
@@ -89,11 +90,11 @@ def parse_uspto_file(bs, logging=False):
         "descriptions": descriptions, # list
         "claims": claims # list
     }
-        
+
     if logging:
-        
+
         # print(bs.prettify())
-        
+
         print("Filename:", filename)
         print("\n\n")
         print("\n--------------------------------------------------------\n")
@@ -102,13 +103,13 @@ def parse_uspto_file(bs, logging=False):
         print("USPTO Publication Number:", publication_num)
         print("USPTO Publication Date:", publication_date)
         print("USPTO Application Type:", application_type)
-            
+
         count = 1
-        for classification in section-class_subclass_groups:
+        for classification in section_class_subclass_groups:
             print("USPTO Classification #"+str(count)+": " + classification)
             count += 1
         print("\n")
-        
+
         count = 1
         for author in authors:
             print("Inventor #"+str(count)+": " + author)
@@ -133,11 +134,11 @@ def parse_uspto_file(bs, logging=False):
         print(bs)
         exit()
 
-            
+
     return uspto_patent
 
 
-def write_to_db(uspto_patent, db=None):    
+def write_to_db(uspto_patent, db=None):
 
     """
     pp = pprint.PrettyPrinter(indent=2)
@@ -157,7 +158,7 @@ def write_to_db(uspto_patent, db=None):
 
     # Will use for created_at & updated_at time
     current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
+
     # INSERTS INTO DB
     uspto_db_entry = [
         uspto_patent['publication_title'],
@@ -195,13 +196,13 @@ def write_to_db(uspto_patent, db=None):
     db_cursor = None
     if db is not None:
         db_cursor = db.obtain_db_cursor()
-    
+
     if db_cursor is not None:
 
         db_cursor.execute("INSERT INTO uspto_patents ("
                           + "publication_title, publication_number, "
-                          + "publication_date, publication_type, " 
-                          + "authors, sections, section_classes, " 
+                          + "publication_date, publication_type, "
+                          + "authors, sections, section_classes, "
                           + "section_class_subclasses, "
                           + "section_class_subclass_groups, "
                           + "abstract, description, claims, "
@@ -221,8 +222,8 @@ def write_to_db(uspto_patent, db=None):
                           + "abstract=%s, description=%s, "
                           + "claims=%s, updated_at=%s", uspto_db_entry)
 
-    return 
-    
+    return
+
 
 arg_filenames = []
 if len(sys.argv) > 1:
@@ -237,8 +238,8 @@ for filename in arg_filenames:
             directory = filename
             if directory[-1] != "/":
                 directory += "/"
-            filenames.append(directory + dir_filename)                
-                
+            filenames.append(directory + dir_filename)
+
     # Load listed files
     if ".xml" in filename:
         filenames.append(filename)
@@ -251,33 +252,33 @@ for filename in filenames:
 db_config_file = "config/postgres.tsv"
 db = PGDBInterface(config_file=db_config_file)
 db.silent_logging = True
-    
+
 count = 1
 success_count = 0
 errors = []
 for filename in filenames:
     if ".xml" in filename:
-        
+
         xml_text = html.unescape(open(filename, 'r').read())
-        
+
         for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
 
             if patent is None or patent == "":
                 continue
-    
+
             bs = BeautifulSoup(patent)
 
             if bs.find('sequence-cwu') is not None:
                 continue # Skip DNA sequence documents
-    
+
             application = bs.find('us-patent-application')
             if application is None: # If no application, search for grant
                 application = bs.find('us-patent-grant')
             title = "None"
-    
+
             try:
                 title = application.find('invention-title').text
-            except Exception as e:          
+            except Exception as e:
                 print("Error", count, e)
 
             try:
@@ -288,7 +289,7 @@ for filename in filenames:
                 exception_tuple = (count, title, e)
                 errors.append(exception_tuple)
                 print(exception_tuple)
-       
+
             if (success_count+len(errors)) % 50 == 0:
                 print(count, filename, title)
                 db.commit_to_db()
@@ -298,6 +299,6 @@ for filename in filenames:
 print("\n\nErrors\n------------------------\n")
 for e in errors:
     print(e)
-    
+
 print("Success Count:", success_count)
 print("Error Count:", len(errors))
