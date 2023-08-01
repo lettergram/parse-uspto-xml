@@ -3,3 +3,5 @@
 config/**
 *.tsv
 **/__pycache__/**
+.venv/
+venv/
