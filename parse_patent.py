@@ -119,7 +119,7 @@ def parse_uspto_file(bs, logging=False):
         "application_type": application_type,
         "authors": authors, # list
         "organizations": organizations, # list
-        "attorney": attorneys, # list
+        "attorneys": attorneys, # list
         "attorney_organizations": attorneys, # list
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
