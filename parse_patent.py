@@ -1,8 +1,10 @@
 import datetime
 import html
+import json
 import os
 import re
 import sys
+import traceback
 
 from bs4 import BeautifulSoup
 
@@ -12,17 +14,31 @@ sys.path.append(utils_path)
 # load the psycopg to connect to postgresql
 from db_interface import PGDBInterface
 
+import setup_loggers
 
-def print_lines(text):
-    """
-    Prints line by line, with the line number
-    """
-    count = 1
-    for line in text.split("\n"):
-        print(count, line)
-        count += 1
 
-def parse_uspto_file(bs, logging=False):
+# setup loggers
+setup_loggers.setup_root_logger()
+logger = setup_loggers.setup_file_logger(__file__)
+
+
+def get_filenames_from_dir(dirpaths: list):
+    """Get filenames from directory"""
+    filenames = []
+    for dirpath in dirpaths:
+        # Load listed directories
+        if os.path.isdir(dirpath):
+            logger.info(f"directory: {dirpath}")
+            for filename in os.listdir(dirpath):
+                fullpath = os.path.join(dirpath, filename)
+                dir_filenames = [fullpath]
+                if os.path.isdir(fullpath):
+                    dir_filenames = get_filenames_from_dir([fullpath])
+                filenames += dir_filenames
+    return filenames
+
+
+def parse_uspto_file(bs, keep_log: bool = False):
     """
     Parses a USPTO patent in a BeautifulSoup object.
     """
@@ -56,6 +72,32 @@ def parse_uspto_file(bs, logging=False):
             section_class_subclasses[classification] = True
             section_class_subclass_groups[classification+" "+group] = True
 
+    def build_name(bs_el):
+        """Creates a name '<First> <Last>'"""
+        # [First Name, Last Name]
+        name_builder = []
+        for attr_name in ["first-name", "last-name"]:
+            value = getattr(bs_el.find(attr_name), "text", "")
+            if value and value != "unknown":
+                name_builder.append(value)
+        name = ""
+        if name_builder:
+            name = " ".join(name_builder).strip()
+        return name
+
+    def build_org(bs_el):
+        """Creates an organization '<org>, <city>, <country>'"""
+        # org_builder: [organization, city, country]
+        org_builder = []
+        for attr_name in ["orgname", "city", "country"]:
+            value = getattr(bs_el.find(attr_name), "text", "")
+            if value and value != "unknown":
+                org_builder.append(value)
+        org_name = ""
+        if org_builder:
+            org_name = ", ".join(org_builder).strip()
+        return org_name
+
     authors = []
     organizations = []
     attorneys = []
@@ -63,42 +105,30 @@ def parse_uspto_file(bs, logging=False):
     for parties in bs.find_all(re.compile('^.*parties')):
         for inventors in parties.find_all(re.compile('inventors')):
             for el in inventors.find_all('addressbook'):
-                first_name = el.find('first-name').text
-                last_name = el.find('last-name').text
-                authors.append(first_name + " " + last_name)
+                # inventor_name: " ".join([first, last])
+                inventor_name = build_name(el)
+                if inventor_name:
+                    authors.append(inventor_name)
 
         for applicants in parties.find_all(re.compile('^.*applicants')):
             for el in applicants.find_all('addressbook'):
-                orgname = getattr(el.find('orgname'), "text", "")
-                if not orgname:
-                    continue
-                org_builder = [orgname]
-                for attr_name in ["city", "country"]:
-                    value = getattr(el.find(attr_name), "text", "")
-                    if value and value != "unknown":
-                        org_builder += [value]
-                # org_builder: [organization, city, country]
-                organizations.append(", ".join(org_builder))
+                # org_name: ", ".join([organization, city, country])
+                org_name = build_org(el)
+                if org_name:
+                    organizations.append(org_name)
 
         for agents in parties.find_all(re.compile('^.*agents')):
             for agent in agents.find_all("agent", attrs={"rep-type": "attorney"}):
                 for el in agent.find_all("addressbook"):
+                    # attorney_name: " ".join([first, last])
+                    attorney_name = build_name(el)
+                    if attorney_name:
+                        attorneys.append(attorney_name)
 
-                    orgname = getattr(el.find('orgname'), "text", "")
-                    if orgname:
-                        org_builder = [orgname]
-                        for attr_name in ["city", "country"]:
-                            value = getattr(el.find(attr_name), "text", "")
-                            if value and value != "unknown":
-                                org_builder += [value]
-                        # org_builder: [organization, city, country]
-                        attorney_organizations.append(", ".join(org_builder))
-
-                    first_name = getattr(el.find("first-name"), "text", "")
-                    if first_name:
-                        last_name = getattr(el.find("last-name"), "text", "")
-                        attorneys.append(first_name + " " + last_name)
-
+                    # org_name: ", ".join([organization, city, country])
+                    org_name = build_org(el)
+                    if org_name:
+                        attorney_organizations.append(org_name)
 
     abstracts = []
     for el in bs.find_all('abstract'):
@@ -130,11 +160,9 @@ def parse_uspto_file(bs, logging=False):
         "claims": claims # list
     }
 
-    if logging:
+    if keep_log:
 
-        # print(bs.prettify())
-
-        print("Filename:", filename)
+        print("Filename:", bs['file'])
         print("\n\n")
         print("\n--------------------------------------------------------\n")
 
@@ -289,43 +317,39 @@ def write_to_db(uspto_patent, db=None):
     return
 
 
-arg_filenames = []
-if len(sys.argv) > 1:
-    arg_filenames = sys.argv[1:]
+def load_local_files(
+    dirpath_list: list,
+    limit_per_file: int | None = None,
+    push_to: str = "db",
+    keep_log: bool = False,
+):
+    """Load all files from local directory"""
+    logger.info("LOADING FILES TO PARSE\n----------------------------")
+    filenames = get_filenames_from_dir(dirpath_list)
 
-filenames = []
-for filename in arg_filenames:
-    # Load listed directories
-    if os.path.isdir(filename):
-        print("directory", filename)
-        for dir_filename in os.listdir(filename):
-            directory = filename
-            if directory[-1] != "/":
-                directory += "/"
-            filenames.append(directory + dir_filename)
+    count = 1
+    success_count = 0
+    errors = []
+    patent_dumps_list = []
+    for filename in filenames:
+        file_success_count = 0
+        if not filename.endswith(".xml"):
+            continue
 
-    # Load listed files
-    if ".xml" in filename:
-        filenames.append(filename)
+        with open(filename, "r") as fp:
+            xml_text = html.unescape(fp.read())
 
-print("LOADING FILES TO PARSE\n----------------------------")
-for filename in filenames:
-    print(filename)
-
-
-db_config_file = "config/postgres.tsv"
-db = PGDBInterface(config_file=db_config_file)
-db.silent_logging = True
-
-count = 1
-success_count = 0
-errors = []
-for filename in filenames:
-    if ".xml" in filename:
-
-        xml_text = html.unescape(open(filename, 'r').read())
-
-        for patent in xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"):
+        xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        for patent in xml_splits, len(xml_splits):
+            if limit_per_file and file_success_count >= limit_per_file:
+                if file_success_count:
+                    logger.info(f"{count}, {filename}, {title}")
+                    if push_to.endswith(".jsonl"):
+                        with open(push_to, "a") as fp:
+                            fp.writelines(patent_dumps_list)
+                        patent_dumps_list = []
+                    _db.commit_to_db()
+                break
 
             if patent is None or patent == "":
                 continue
@@ -343,26 +367,54 @@ for filename in filenames:
             try:
                 title = application.find('invention-title').text
             except Exception as e:
-                print("Error", count, e)
+                logger.error(f"Error at {count}: {str(e)}")
 
             try:
-                uspto_patent = parse_uspto_file(application)
-                write_to_db(uspto_patent, db=db)
+                uspto_patent = parse_uspto_file(
+                    bs=application,
+                    keep_log=keep_log
+                )
+                if push_to.endswith(".jsonl"):
+                    patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
+                write_to_db(uspto_patent, db=_db)
                 success_count += 1
+                file_success_count += 1
             except Exception as e:
-                exception_tuple = (count, title, e)
+                exception_tuple = (count, title, e, traceback.format_exc())
                 errors.append(exception_tuple)
-                print(exception_tuple)
+                logger.error(f"Error: {exception_tuple}")
 
             if (success_count+len(errors)) % 50 == 0:
-                print(count, filename, title)
-                db.commit_to_db()
+                logger.info(f"{count}, {filename}, {title}")
+                if push_to.endswith(".jsonl"):
+                    with open(push_to, "a") as fp:
+                        fp.writelines(patent_dumps_list)
+                    patent_dumps_list = []
+                _db.commit_to_db()
             count += 1
 
+    if errors:
+        logger.error("\n\nErrors\n------------------------\n")
+        for e in errors:
+            logger.error(e)
+    logger.info("\n\nSuccess Count:", success_count)
+    logger.info("Error Count:", len(errors))
 
-print("\n\nErrors\n------------------------\n")
-for e in errors:
-    print(e)
 
-print("Success Count:", success_count)
-print("Error Count:", len(errors))
+if __name__ == "__main__":
+    _arg_filenames = []
+    if len(sys.argv) > 1:
+        _arg_filenames = sys.argv[1:]
+
+
+    _db_config_file = "config/postgres.tsv"
+    _db = PGDBInterface(config_file=_db_config_file)
+    _db.silent_logging = True
+
+    _push_to = "db"
+    load_local_files(
+        dirpath_list=_arg_filenames,
+        limit_per_file=None,
+        push_to=_push_to,
+        keep_log=False,
+    )
