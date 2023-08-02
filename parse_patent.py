@@ -211,12 +211,6 @@ def parse_uspto_file(bs, keep_log: bool = False):
         for claim in claims:
             print(claim)
 
-    title = "Shower shield system for bathroom shower drain areaways"
-    if bs.find('invention-title').text == title:
-        print(bs)
-        exit()
-
-
     return uspto_patent
 
 
