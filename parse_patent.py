@@ -58,6 +58,8 @@ def parse_uspto_file(bs, logging=False):
 
     authors = []
     organizations = []
+    attorneys = []
+    attorney_organizations = []
     for parties in bs.find_all(re.compile('^.*parties')):
         for inventors in parties.find_all(re.compile('inventors')):
             for el in inventors.find_all('addressbook'):
@@ -73,10 +75,30 @@ def parse_uspto_file(bs, logging=False):
                 org_builder = [orgname]
                 for attr_name in ["city", "country"]:
                     value = getattr(el.find(attr_name), "text", "")
-                    if value:
+                    if value and value != "unknown":
                         org_builder += [value]
                 # org_builder: [organization, city, country]
                 organizations.append(", ".join(org_builder))
+
+        for agents in parties.find_all(re.compile('^.*agents')):
+            for agent in agents.find_all("agent", attrs={"rep-type": "attorney"}):
+                for el in agent.find_all("addressbook"):
+
+                    orgname = getattr(el.find('orgname'), "text", "")
+                    if orgname:
+                        org_builder = [orgname]
+                        for attr_name in ["city", "country"]:
+                            value = getattr(el.find(attr_name), "text", "")
+                            if value and value != "unknown":
+                                org_builder += [value]
+                        # org_builder: [organization, city, country]
+                        attorney_organizations.append(", ".join(org_builder))
+
+                    first_name = getattr(el.find("first-name"), "text", "")
+                    if first_name:
+                        last_name = getattr(el.find("last-name"), "text", "")
+                        attorneys.append(first_name + " " + last_name)
+
 
     abstracts = []
     for el in bs.find_all('abstract'):
@@ -97,6 +119,8 @@ def parse_uspto_file(bs, logging=False):
         "application_type": application_type,
         "authors": authors, # list
         "organizations": organizations, # list
+        "attorney": attorneys, # list
+        "attorney_organizations": attorneys, # list
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
         "section_class_subclasses": list(section_class_subclasses.keys()),
@@ -133,6 +157,16 @@ def parse_uspto_file(bs, logging=False):
         count = 1
         for org in organizations:
             print("Organization #"+str(count)+": " + org)
+            count += 1
+
+        count = 1
+        for attorney in attorneys:
+            print("Attorney #"+str(count)+": " + attorney)
+            count += 1
+
+        count = 1
+        for org in attorney_organizations:
+            print("Attorney Organization #"+str(count)+": " + org)
             count += 1
 
         print("\n--------------------------------------------------------\n")
@@ -188,6 +222,8 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['application_type'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
+        ','.join(uspto_patent['attorneys']),
+        ','.join(uspto_patent['attorney_organizations']),
         ','.join(uspto_patent['sections']),
         ','.join(uspto_patent['section_classes']),
         ','.join(uspto_patent['section_class_subclasses']),
@@ -206,6 +242,8 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['application_type'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
+        ','.join(uspto_patent['attorneys']),
+        ','.join(uspto_patent['attorney_organizations']),
         ','.join(uspto_patent['sections']),
         ','.join(uspto_patent['section_classes']),
         ','.join(uspto_patent['section_class_subclasses']),
@@ -225,20 +263,22 @@ def write_to_db(uspto_patent, db=None):
         db_cursor.execute("INSERT INTO uspto_patents ("
                           + "publication_title, publication_number, "
                           + "publication_date, publication_type, "
-                          + "authors, organizations, sections, section_classes, "
-                          + "section_class_subclasses, "
+                          + "authors, organizations, attorneys, attorney_organizations, "
+                          + "sections, section_classes, section_class_subclasses, "
                           + "section_class_subclass_groups, "
                           + "abstract, description, claims, "
                           + "created_at, updated_at"
                           + ") VALUES ("
                           + "%s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                          + "%s, %s, %s, %s, %s, %s) "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s) "
                           + "ON CONFLICT(publication_number) "
                           + "DO UPDATE SET "
                           + "publication_title=%s, "
                           + "publication_date=%s, "
                           + "publication_type=%s, "
                           + "authors=%s, "
+                          + "attorneys=%s, "
+                          + "attorney_organizations=%s, "
                           + "organizations=%s, "
                           + "sections=%s, section_classes=%s, "
                           + "section_class_subclasses=%s, "
