@@ -57,12 +57,23 @@ def parse_uspto_file(bs, logging=False):
             section_class_subclass_groups[classification+" "+group] = True
 
     authors = []
+    organizations = []
     for parties in bs.find_all(re.compile('^.*parties')):
-        for applicants in parties.find_all(re.compile('inventors')):
-            for el in applicants.find_all('addressbook'):
+        for inventors in parties.find_all(re.compile('inventors')):
+            for el in inventors.find_all('addressbook'):
                 first_name = el.find('first-name').text
                 last_name = el.find('last-name').text
                 authors.append(first_name + " " + last_name)
+
+        for applicants in parties.find_all(re.compile('^.*applicants')):
+            for el in applicants.find_all('addressbook'):
+                orgname = el.find('orgname')
+                if not orgname:
+                    continue
+                orgname = orgname.text
+                city = el.find('city').text
+                country= el.find('country').text
+                organizations.append(", ".join([orgname,  city, country]))
 
     abstracts = []
     for el in bs.find_all('abstract'):
@@ -82,6 +93,7 @@ def parse_uspto_file(bs, logging=False):
         "publication_date": publication_date,
         "application_type": application_type,
         "authors": authors, # list
+        "organizations": organizations, # list
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
         "section_class_subclasses": list(section_class_subclasses.keys()),
@@ -115,6 +127,11 @@ def parse_uspto_file(bs, logging=False):
             print("Inventor #"+str(count)+": " + author)
             count += 1
 
+        count = 1
+        for org in organizations:
+            print("Organization #"+str(count)+": " + org)
+            count += 1
+
         print("\n--------------------------------------------------------\n")
 
         print("Abstract:\n-----------------------------------------------")
@@ -141,6 +158,7 @@ def parse_uspto_file(bs, logging=False):
 def write_to_db(uspto_patent, db=None):
 
     """
+    import pprint
     pp = pprint.PrettyPrinter(indent=2)
     for key in uspto_patent:
         if type(uspto_patent[key]) == list:
@@ -166,6 +184,7 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['publication_date'],
         uspto_patent['application_type'],
         ','.join(uspto_patent['authors']),
+        ','.join(uspto_patent['organizations']),
         ','.join(uspto_patent['sections']),
         ','.join(uspto_patent['section_classes']),
         ','.join(uspto_patent['section_class_subclasses']),
@@ -183,6 +202,7 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['publication_date'],
         uspto_patent['application_type'],
         ','.join(uspto_patent['authors']),
+        ','.join(uspto_patent['organizations']),
         ','.join(uspto_patent['sections']),
         ','.join(uspto_patent['section_classes']),
         ','.join(uspto_patent['section_class_subclasses']),
@@ -202,13 +222,13 @@ def write_to_db(uspto_patent, db=None):
         db_cursor.execute("INSERT INTO uspto_patents ("
                           + "publication_title, publication_number, "
                           + "publication_date, publication_type, "
-                          + "authors, sections, section_classes, "
+                          + "authors, organizations, sections, section_classes, "
                           + "section_class_subclasses, "
                           + "section_class_subclass_groups, "
                           + "abstract, description, claims, "
                           + "created_at, updated_at"
                           + ") VALUES ("
-                          + "%s, %s, %s, %s, %s, %s, %s, %s, "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, "
                           + "%s, %s, %s, %s, %s, %s) "
                           + "ON CONFLICT(publication_number) "
                           + "DO UPDATE SET "
@@ -216,6 +236,7 @@ def write_to_db(uspto_patent, db=None):
                           + "publication_date=%s, "
                           + "publication_type=%s, "
                           + "authors=%s, "
+                          + "organizations=%s, "
                           + "sections=%s, section_classes=%s, "
                           + "section_class_subclasses=%s, "
                           + "section_class_subclass_groups=%s, "
