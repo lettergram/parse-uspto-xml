@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+from pathlib import Path
 
 
 logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
@@ -15,13 +16,14 @@ def setup_root_logger(level: int = logging.INFO):
 
 
 def setup_file_logger(filename: str, level: int = logging.INFO) -> logging.Logger:
-    log_dirpath = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "logs",
-        os.path.basename(filename) + ".log"
+    log_dirpath = os.path.dirname(os.path.abspath(__file__))
+    Path(log_dirpath).mkdir(parents=True, exist_ok=True)
+
+    log_filepath = os.path.join(
+        log_dirpath,  "logs", os.path.basename(filename) + ".log"
     )
     logger = logging.getLogger(filename)
-    file_handler = logging.FileHandler(filename=log_dirpath)
+    file_handler = logging.FileHandler(filename=log_filepath)
     file_handler.setFormatter(logFormatter)
     logger.setLevel(level)
     logger.addHandler(file_handler)
