@@ -321,6 +321,17 @@ def load_local_files(
     logger.info("LOADING FILES TO PARSE\n----------------------------")
     filenames = get_filenames_from_dir(dirpath_list)
 
+    if (
+        not (isinstance(push_to, str) and push_to.endswith('.jsonl'))
+        or isinstance(push_to, PGDBInterface)
+    ):
+        push_to_error = (
+            f"push_to: `{str(push_to)}` is not valid."
+            " must be a str ending in 'jsonl' or a PGDBInterface."
+        )
+        logger.error(push_to_error)
+        raise ValueError(push_to_error)
+
     count = 1
     success_count = 0
     errors = []
