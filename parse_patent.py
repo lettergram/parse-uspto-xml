@@ -320,7 +320,7 @@ def write_to_db(uspto_patent, db=None):
 def load_local_files(
     dirpath_list: list,
     limit_per_file: int | None = None,
-    push_to: str = "db",
+    push_to: str | PGDBInterface = "db",
     keep_log: bool = False,
 ):
     """Load all files from local directory"""
@@ -344,11 +344,12 @@ def load_local_files(
             if limit_per_file and file_success_count >= limit_per_file:
                 if file_success_count:
                     logger.info(f"{count}, {filename}, {title}")
-                    if push_to.endswith(".jsonl"):
+                    if isinstance(push_to, str) and push_to.endswith(".jsonl"):
                         with open(push_to, "a") as fp:
                             fp.writelines(patent_dumps_list)
                         patent_dumps_list = []
-                    _db.commit_to_db()
+                    elif isinstance(push_to, PGDBInterface):
+                        push_to.commit_to_db()
                 break
 
             if patent is None or patent == "":
@@ -374,9 +375,10 @@ def load_local_files(
                     bs=application,
                     keep_log=keep_log
                 )
-                if push_to.endswith(".jsonl"):
+                if isinstance(push_to, str) and push_to.endswith(".jsonl"):
                     patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
-                write_to_db(uspto_patent, db=_db)
+                elif isinstance(push_to, PGDBInterface):
+                    write_to_db(uspto_patent, db=push_to)
                 success_count += 1
                 file_success_count += 1
             except Exception as e:
@@ -386,11 +388,12 @@ def load_local_files(
 
             if (success_count+len(errors)) % 50 == 0:
                 logger.info(f"{count}, {filename}, {title}")
-                if push_to.endswith(".jsonl"):
+                if isinstance(push_to, str) and push_to.endswith(".jsonl"):
                     with open(push_to, "a") as fp:
                         fp.writelines(patent_dumps_list)
                     patent_dumps_list = []
-                _db.commit_to_db()
+                elif isinstance(push_to, PGDBInterface):
+                    push_to.commit_to_db()
             count += 1
 
     if errors:
@@ -410,8 +413,8 @@ if __name__ == "__main__":
     _db_config_file = "config/postgres.tsv"
     _db = PGDBInterface(config_file=_db_config_file)
     _db.silent_logging = True
+    _push_to = _db
 
-    _push_to = "db"
     load_local_files(
         dirpath_list=_arg_filenames,
         limit_per_file=None,
