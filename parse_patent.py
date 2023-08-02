@@ -119,8 +119,8 @@ def parse_uspto_file(bs, logging=False):
         "application_type": application_type,
         "authors": authors, # list
         "organizations": organizations, # list
-        "attorney": attorneys, # list
-        "attorney_organizations": attorneys, # list
+        "attorneys": attorneys, # list
+        "attorney_organizations": attorney_organizations, # list
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
         "section_class_subclasses": list(section_class_subclasses.keys()),
