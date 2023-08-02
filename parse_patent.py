@@ -345,7 +345,7 @@ def load_local_files(
             xml_text = html.unescape(fp.read())
 
         xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-        for patent in xml_splits, len(xml_splits):
+        for patent in xml_splits:
             if limit_per_file and file_success_count >= limit_per_file:
                 if file_success_count:
                     logger.info(f"{count}, {filename}, {title}")
