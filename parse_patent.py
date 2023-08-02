@@ -67,13 +67,16 @@ def parse_uspto_file(bs, logging=False):
 
         for applicants in parties.find_all(re.compile('^.*applicants')):
             for el in applicants.find_all('addressbook'):
-                orgname = el.find('orgname')
+                orgname = getattr(el.find('orgname'), "text", "")
                 if not orgname:
                     continue
-                orgname = orgname.text
-                city = el.find('city').text
-                country= el.find('country').text
-                organizations.append(", ".join([orgname,  city, country]))
+                org_builder = [orgname]
+                for attr_name in ["city", "country"]:
+                    value = getattr(el.find(attr_name), "text", "")
+                    if value:
+                        org_builder += [value]
+                # org_builder: [organization, city, country]
+                organizations.append(", ".join(org_builder))
 
     abstracts = []
     for el in bs.find_all('abstract'):
