@@ -8,6 +8,7 @@ logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelnam
 
 
 def setup_root_logger(level: int = logging.INFO):
+    """Sets up root logger to use console."""
     root_logger = logging.getLogger()
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logFormatter)
@@ -16,6 +17,7 @@ def setup_root_logger(level: int = logging.INFO):
 
 
 def setup_file_logger(filename: str, level: int = logging.INFO) -> logging.Logger:
+    """Sets up file logger for an individual file."""
     log_dirpath = os.path.dirname(os.path.abspath(__file__))
     Path(log_dirpath).mkdir(parents=True, exist_ok=True)
 
