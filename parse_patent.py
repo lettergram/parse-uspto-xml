@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import traceback
+from typing import Union
 
 from bs4 import BeautifulSoup
 
@@ -24,6 +25,10 @@ logger = setup_loggers.setup_file_logger(__file__)
 
 def get_filenames_from_dir(dirpaths: list):
     """Get filenames from directory"""
+
+    if len(dirpaths) == 1 and not dirpaths[0][-1] == '/':
+        return dirpaths
+    
     filenames = []
     for dirpath in dirpaths:
         # Load listed directories
@@ -35,6 +40,8 @@ def get_filenames_from_dir(dirpaths: list):
                 if os.path.isdir(fullpath):
                     dir_filenames = get_filenames_from_dir([fullpath])
                 filenames += dir_filenames
+        else:
+            filenames += dirpath
     return filenames
 
 
@@ -312,18 +319,18 @@ def write_to_db(uspto_patent, db=None):
 
 
 def load_local_files(
-    dirpath_list: list,
-    limit_per_file: int | None = None,
-    push_to: str | PGDBInterface = "db",
-    keep_log: bool = False,
+        dirpath_list:  list,
+        limit_per_file: Union[int, None] = None,
+        push_to: Union[str, PGDBInterface] = "db",
+        keep_log: bool = False,
 ):
     """Load all files from local directory"""
     logger.info("LOADING FILES TO PARSE\n----------------------------")
     filenames = get_filenames_from_dir(dirpath_list)
-
+    
     if (
         not (isinstance(push_to, str) and push_to.endswith('.jsonl'))
-        or isinstance(push_to, PGDBInterface)
+            and not isinstance(push_to, PGDBInterface)
     ):
         push_to_error = (
             f"push_to: `{str(push_to)}` is not valid."
@@ -331,7 +338,7 @@ def load_local_files(
         )
         logger.error(push_to_error)
         raise ValueError(push_to_error)
-
+    
     count = 1
     success_count = 0
     errors = []
