@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import datetime
 import html
 import json
@@ -340,10 +338,6 @@ def load_local_files(
         )
         logger.error(push_to_error)
         raise ValueError(push_to_error)
-
-    print()
-    print(filenames)
-    print()
     
     count = 1
     success_count = 0
@@ -354,10 +348,8 @@ def load_local_files(
         if not filename.endswith(".xml"):
             continue
 
-        print("opening file", filename)
         with open(filename, "r") as fp:
             xml_text = html.unescape(fp.read())
-        print("opened file", filename)
 
         xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
         for patent in xml_splits:
@@ -437,7 +429,7 @@ if __name__ == "__main__":
 
     load_local_files(
         dirpath_list=_arg_filenames,
-        limit_per_file=None,
+        limit_per_file=2,
         push_to=_push_to,
         keep_log=False,
     )
