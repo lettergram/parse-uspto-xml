@@ -429,7 +429,7 @@ if __name__ == "__main__":
 
     load_local_files(
         dirpath_list=_arg_filenames,
-        limit_per_file=2,
+        limit_per_file=None,
         push_to=_push_to,
         keep_log=False,
     )
