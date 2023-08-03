@@ -405,8 +405,8 @@ def load_local_files(
         logger.error("\n\nErrors\n------------------------\n")
         for e in errors:
             logger.error(e)
-    logger.info("\n\nSuccess Count:", success_count)
-    logger.info("Error Count:", len(errors))
+    logger.info(f"\n\nSuccess Count: {success_count}")
+    logger.info(f"Error Count: {len(errors)}")
 
 
 if __name__ == "__main__":
