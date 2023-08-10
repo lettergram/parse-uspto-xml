@@ -18,7 +18,7 @@ def setup_root_logger(level: int = logging.INFO):
 
 def setup_file_logger(filename: str, level: int = logging.INFO) -> logging.Logger:
     """Sets up file logger for an individual file."""
-    log_dirpath = os.path.dirname(os.path.abspath(__file__))
+    log_dirpath = os.getcwd()
     Path(log_dirpath).mkdir(parents=True, exist_ok=True)
 
     log_filepath = os.path.join(

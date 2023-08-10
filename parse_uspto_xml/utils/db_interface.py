@@ -6,6 +6,12 @@ import ast
 import psycopg2
 import psycopg2.extras
 
+from parse_uspto_xml.setup_loggers import setup_file_logger
+
+
+# setup file logger
+logger = setup_file_logger(__file__)
+
 
 class PGDBInterface:
 
@@ -22,7 +28,6 @@ class PGDBInterface:
 
         # Ensures immediate commits, not waiting for transactions
         self.conn.autocommit = True
-
 
     def create_db_connection(self, check_environment=True,
                              config_file="../config/postgres.tsv"):
@@ -41,38 +46,38 @@ class PGDBInterface:
         params = {}
         if check_environment:
             if not self.silent_logging:
-                print("\nChecking Environment Parameters for Database\n")
+                logger.info("\nChecking Environment Parameters for Database\n")
             if 'DATABASE_NAME' in os.environ:
                 params['database'] = os.environ['DATABASE_NAME']
             else:
                 if not self.silent_logging:
-                    print("Environment variable DATABASE_NAME not set")
+                    logger.info("Environment variable DATABASE_NAME not set")
             if 'DATABASE_HOST' in os.environ:
                 params['host'] = os.environ['DATABASE_HOST']
             else:
                 if not self.silent_logging:
-                    print("Environment variable DATABASE_HOST not set")
+                    logger.info("Environment variable DATABASE_HOST not set")
             if 'DATABASE_PORT' in os.environ:
                 params['port'] = os.environ['DATABASE_PORT']
             else:
                 if not self.silent_logging:
-                    print("Environment variable DATABASE_PORT not set")
+                    logger.info("Environment variable DATABASE_PORT not set")
             if 'DATABASE_USER' in os.environ:
                 params['user'] = os.environ['DATABASE_USER']
             else:
                 if not self.silent_logging:
-                    print("Environment variable DATABASE_USER not set")
+                    logger.info("Environment variable DATABASE_USER not set")
             if 'DATABASE_PASS' in os.environ:
                 params['password'] = os.environ['DATABASE_PASS']
             else:
                 if not self.silent_logging:
-                    print("Environment variable DATABASE_PASS not set")
+                    logger.info("Environment variable DATABASE_PASS not set")
 
         # If no environment parameters used and config file exists
         if not params and os.path.isfile(config_file):
 
             if not self.silent_logging:
-                print("\nUsing Config File for Database\n")
+                logger.info("Using Config File for Database\n")
 
             # Find the database parameters, remote and local databases
             with open(config_file, 'r') as tsvfile:
@@ -85,14 +90,14 @@ class PGDBInterface:
                         params = ast.literal_eval(row[1])
         else:
             if not self.silent_logging:
-                print("Using Environment Variables for Database")
+                logger.info("Using Environment Variables for Database")
 
         # Try to connect to database
         try:
 
             if remote:
                 if not self.silent_logging:
-                    print("Connecting to remote database")
+                    logger.info("Connecting to remote database")
                 self.conn = psycopg2.connect(database=params["database"],
                                              user=params["user"],
                                              password=params["password"],
@@ -101,18 +106,18 @@ class PGDBInterface:
                                              sslmode='require')
             else:
                 if not self.silent_logging:
-                    print("Connecting to local database")
+                    logger.info("Connecting to local database")
                 self.conn = psycopg2.connect(database=params["database"],
                                              user=params["user"],
                                              password=params["password"],
                                              host=params["host"],
                                              port=params["port"])
         except Exception as err:
-            print("I am unable to connect to the database.")
-            print(err)
+            logger.info("I am unable to connect to the database.")
+            logger.info(err)
             exit()
 
-        print("Connected to database")
+        logger.info("Connected to database")
         self.cursor = self.conn.cursor()
 
     def obtain_db_connection(self):
@@ -124,21 +129,21 @@ class PGDBInterface:
     def commit_to_db(self):
         # Make the changes to the database persistent=
         if not self.silent_logging:
-            print("Committing to database")
+            logger.info("Committing to database")
         self.conn.commit()
 
     def close_db_connection(self):
 
         # Close communication with the database
         if not self.silent_logging:
-            print("Closing cursor")
+            logger.info("Closing cursor")
         self.cursor.close()
 
         if not self.silent_logging:
-            print("Closing connection")
+            logger.info("Closing connection")
         self.conn.close()
 
         self.cursor  = None
         self.conn    = None
 
-        print("Disconnected from database")
+        logger.info("Disconnected from database")
