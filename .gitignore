@@ -6,3 +6,5 @@ config/**
 .venv/
 venv/
 **.egg-info
+logs/*
+data/*
