@@ -9,13 +9,9 @@ from typing import Union
 
 from bs4 import BeautifulSoup
 
-utils_path = os.path.abspath('utils')
-sys.path.append(utils_path)
-
 # load the psycopg to connect to postgresql
-from db_interface import PGDBInterface
-
-import setup_loggers
+from parse_uspto_xml import setup_loggers
+from parse_uspto_xml.utils.db_interface import PGDBInterface
 
 
 # setup loggers
@@ -28,7 +24,7 @@ def get_filenames_from_dir(dirpaths: list):
 
     if len(dirpaths) == 1 and not dirpaths[0][-1] == '/':
         return dirpaths
-    
+
     filenames = []
     for dirpath in dirpaths:
         # Load listed directories
@@ -54,7 +50,6 @@ def parse_uspto_file(bs, keep_log: bool = False):
     publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
     application_type = bs.find('application-reference')['appl-type']
-
 
     # International Patent Classification (IPC) Docs:
     # https://www.wipo.int/classifications/ipc/en/
@@ -327,7 +322,7 @@ def load_local_files(
     """Load all files from local directory"""
     logger.info("LOADING FILES TO PARSE\n----------------------------")
     filenames = get_filenames_from_dir(dirpath_list)
-    
+
     if (
         not (isinstance(push_to, str) and push_to.endswith('.jsonl'))
             and not isinstance(push_to, PGDBInterface)
@@ -338,7 +333,7 @@ def load_local_files(
         )
         logger.error(push_to_error)
         raise ValueError(push_to_error)
-    
+
     count = 1
     success_count = 0
     errors = []

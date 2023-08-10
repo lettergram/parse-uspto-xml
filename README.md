@@ -18,10 +18,13 @@ It also will skip all documents with DNA sequences.
 
 **Step 2**: Extract the ziped file: `*.xml`
 
-**Step 3**: Individual patents (or directories) can then be parsed with:
+**Step 3**: Install the package locally
+pip install -e .
 
-```python
-parse_patent.py <filename.xml> <filename.xml> <directory>
+**Step 4**: Individual patents (or directories) can then be parsed with:
+
+```
+python prase_uspto_xml/parse_patent.py <filename.xml> <filename.xml> <directory>
 ```
 
 You can edit the `filename` variable in the python file `parse_patent.py` to match the unzipped file. Inside that file are typically thousands of patents which can be parsed for the given week.
@@ -54,7 +57,7 @@ In addition, it's possible to save the parsed data in a database. In this reposi
 
 This reduces the size of a file `ipa200109.xml` of *734MB* to *154MB* (in the database).
 
-In terms of overall size, the XML files are 367Gb, the parsed files (in the database) are 
+In terms of overall size, the XML files are 367Gb, the parsed files (in the database) are
 
 In terms of decompressed data (by year) & unerrored parsed patent documents:
 
