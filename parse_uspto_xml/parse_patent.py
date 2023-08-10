@@ -48,10 +48,128 @@ def parse_uspto_file(bs, keep_log: bool = False):
     Parses a USPTO patent in a BeautifulSoup object.
     """
 
+    grant_date = bs.get("date-produced", None)
+
     publication_title = bs.find('invention-title').text
     publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
-    application_type = bs.find('application-reference')['appl-type']
+    application_ref_bs = bs.find('application-reference')
+    application_type = application_ref_bs['appl-type']
+    application_date = application_ref_bs.find('date').text
+    application_num = application_ref_bs.find('doc-number').text
+
+    referential_documents = []
+    # {uspto_patents.publication_number,reference,cited_by_examiner,document_type,country,metadata (JSON)
+
+    related_docs_bs = bs.find("us-related-documents")
+    for related_doc_bs in (related_docs_bs.find_all(recursive=False) if related_docs_bs else []):
+        related_doc = {
+            "publication_number": publication_num,
+            "reference": None,
+            "cited_by_examiner": None,
+            "document_type": None,
+            "country": None,
+            "metadata": {}
+        }
+        if related_doc_bs.name in ["continuation", "division", "continuation-in-part", "reissue", "substitution"]:
+            related_doc["document_type"] = related_doc_bs.name
+            related_doc["cited_by_examiner"] = False
+            for documents_bs in related_doc_bs.find_all(re.compile("(parent|child)-doc(ument)?$")):
+                for doc_bs in documents_bs.find_all("document-id"):
+                    if doc_bs.parent.name == "parent-grant-document":
+                        related_doc["reference"] = doc_bs.find("doc-number").text
+                    elif doc_bs.parent.name == "parent-pct-document":
+                        related_doc["metadata"]["parent_pct_number"] = doc_bs.find("doc-number").text
+                        related_doc["metadata"]["parent_pct_country"] = doc_bs.find("country").text
+                        related_doc["metadata"]["parent_pct_date"] = getattr(doc_bs.find("date"), "text", None)
+                    elif doc_bs.parent.name == "parent-doc":
+                        related_doc["country"] = doc_bs.find("country").text
+                        related_doc["metadata"]["application_number"] = doc_bs.find("doc-number").text
+                        related_doc["metadata"]["application_date"] = getattr(doc_bs.find("date"), "text", None)
+                    elif doc_bs.parent.name == "child-doc":
+                        related_doc["metadata"]["child_application_number"] = doc_bs.find("doc-number").text
+                        related_doc["metadata"]["parent_country"] = doc_bs.find("country").text
+        elif related_doc_bs.name in ["us-provisional-application"]:
+            related_doc["document_type"] = "provisional"
+            related_doc["cited_by_examiner"] = False
+            related_doc["country"] = related_doc_bs.find("country").text
+            related_doc["reference"] = related_doc_bs.find("doc-number").text
+            related_doc["metadata"]["application_date"] = related_doc_bs.find("date").text
+        elif related_doc_bs.name in ["related-publication"]:
+            related_doc["document_type"] = "prior"
+            related_doc["cited_by_examiner"] = False
+            related_doc["reference"] = related_doc_bs.find("doc-number").text
+            related_doc["country"] = related_doc_bs.find("country").text
+            related_doc["metadata"]["kind"] = related_doc_bs.find("kind").text
+            related_doc["metadata"]["date"] = related_doc_bs.find("date").text
+        else:
+            raise KeyError(f"'{related_doc_bs.name}' is not setup to be included in referential documents.")
+        referential_documents.append(related_doc)
+
+    references = []
+    refs_cited_bs = bs.find(re.compile(".*-references-cited"))
+    if refs_cited_bs:
+        for ref_bs in refs_cited_bs.find_all(re.compile(".*-citation")):
+            doc_bs = ref_bs.find("document-id")
+            if doc_bs:
+                reference = {
+                    "publication_number": publication_num,
+                    "reference": doc_bs.find("doc-number").text,
+                    "cited_by_examiner": "examiner" in ref_bs.find("category").text,
+                    "document_type": "patent-reference",
+                    "country": getattr(doc_bs.find("country"), "text", None),
+                    "metadata":{
+                        "name": getattr(doc_bs.find("name"), "text", None),
+                        "kind": getattr(doc_bs.find("kind"), "text", None),
+                        "date": getattr(doc_bs.find("date"), "text", None),
+                    }
+                }
+            else:
+                reference = {
+                    "publication_number": publication_num,
+                    "reference": ref_bs.find("othercit").text,
+                    "cited_by_examiner": "examiner" in ref_bs.find("category").text,
+                    "document_type": "other-reference",
+                    "country": getattr(ref_bs.find("country"), "text", None),
+                    "metadata":{}
+                }
+            references.append(reference)
+        referential_documents += references
+
+    priority_claims = []
+    priority_docs_bs = bs.find("priority-claims")
+    if priority_docs_bs:
+        for doc_bs in priority_docs_bs.find_all("priority-claim"):
+            priority_claims.append({
+                "publication_number": publication_num,
+                "reference": doc_bs.find("doc-number").text,
+                "cited_by_examiner": False,
+                "document_type": "other-reference",
+                "country": getattr(doc_bs.find("country"), "text", None),
+                "metadata":{
+                    "date": getattr(doc_bs.find("date"), "text", None),
+                },
+            })
+        referential_documents += priority_claims
+
+    # check to make sure all keys are proper -- TODO: this should be a test.
+    for reference in referential_documents:
+        expected_keys = {
+            "publication_number",
+            "reference",
+            "cited_by_examiner",
+            "document_type",
+            "country",
+            "metadata"
+        }
+        missing_keys = expected_keys - set(reference.keys())
+        bad_keys =  set(reference.keys()) - expected_keys
+        if missing_keys or bad_keys:
+            raise KeyError(
+                f"referential_documents has missing_keys: "
+                f"{missing_keys} and bad_keys: {bad_keys} "
+                f"for {reference}"
+            )
 
     # International Patent Classification (IPC) Docs:
     # https://www.wipo.int/classifications/ipc/en/
@@ -149,12 +267,16 @@ def parse_uspto_file(bs, keep_log: bool = False):
     uspto_patent = {
         "publication_title": publication_title,
         "publication_number": publication_num,
+        "grant_date": grant_date,
         "publication_date": publication_date,
+        "application_num": application_num,
         "application_type": application_type,
+        "application_date": application_date,
         "authors": authors, # list
         "organizations": organizations, # list
         "attorneys": attorneys, # list
         "attorney_organizations": attorney_organizations, # list
+        "referential_documents": referential_documents,
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
         "section_class_subclasses": list(section_class_subclasses.keys()),
