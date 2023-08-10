@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import html
 import json
@@ -19,11 +21,11 @@ setup_loggers.setup_root_logger()
 logger = setup_loggers.setup_file_logger(__file__)
 
 
-def get_filenames_from_dir(dirpaths: list):
+def get_filenames_from_dir(dirpaths: list | str):
     """Get filenames from directory"""
 
-    if len(dirpaths) == 1 and not dirpaths[0][-1] == '/':
-        return dirpaths
+    if isinstance(dirpaths, str):
+        dirpaths = [dirpaths]
 
     filenames = []
     for dirpath in dirpaths:
@@ -37,7 +39,7 @@ def get_filenames_from_dir(dirpaths: list):
                     dir_filenames = get_filenames_from_dir([fullpath])
                 filenames += dir_filenames
         else:
-            filenames += dirpath
+            filenames += [dirpath]
     return filenames
 
 
@@ -362,7 +364,7 @@ def load_local_files(
             if patent is None or patent == "":
                 continue
 
-            bs = BeautifulSoup(patent)
+            bs = BeautifulSoup(patent, "lxml")
 
             if bs.find('sequence-cwu') is not None:
                 continue # Skip DNA sequence documents
@@ -375,7 +377,7 @@ def load_local_files(
             try:
                 title = application.find('invention-title').text
             except Exception as e:
-                logger.error(f"Error at {count}: {str(e)}")
+                logger.error(f"Error at {count}: {str(e)}", e)
 
             try:
                 uspto_patent = parse_uspto_file(
@@ -391,7 +393,7 @@ def load_local_files(
             except Exception as e:
                 exception_tuple = (count, title, e, traceback.format_exc())
                 errors.append(exception_tuple)
-                logger.error(f"Error: {exception_tuple}")
+                logger.error(f"Error: {exception_tuple}", e)
 
             if (success_count+len(errors)) % 50 == 0:
                 logger.info(f"{count}, {filename}, {title}")
@@ -407,7 +409,9 @@ def load_local_files(
         logger.error("\n\nErrors\n------------------------\n")
         for e in errors:
             logger.error(e)
-    logger.info(f"\n\nSuccess Count: {success_count}")
+    logger.info("=" * 50)
+    logger.info("=" * 50)
+    logger.info(f"Success Count: {success_count}")
     logger.info(f"Error Count: {len(errors)}")
 
 
