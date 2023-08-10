@@ -23,8 +23,8 @@ pip install -e .
 
 **Step 4**: Individual patents (or directories) can then be parsed with:
 
-```python
-parse_patent.py <filename.xml> <filename.xml> <directory>
+```
+python prase_uspto_xml/parse_patent.py <filename.xml> <filename.xml> <directory>
 ```
 
 You can edit the `filename` variable in the python file `parse_patent.py` to match the unzipped file. Inside that file are typically thousands of patents which can be parsed for the given week.
