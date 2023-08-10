@@ -267,8 +267,8 @@ def parse_uspto_file(bs, keep_log: bool = False):
     uspto_patent = {
         "publication_title": publication_title,
         "publication_number": publication_num,
-        "grant_date": grant_date,
         "publication_date": publication_date,
+        "grant_date": grant_date,
         "application_num": application_num,
         "application_type": application_type,
         "application_date": application_date,
@@ -367,7 +367,11 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['publication_title'],
         uspto_patent['publication_number'],
         uspto_patent['publication_date'],
+        uspto_patent['publication_type'],
+        uspto_patent['grant_date'],
+        uspto_patent['application_num'],
         uspto_patent['application_type'],
+        uspto_patent['application_date'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
         ','.join(uspto_patent['attorneys']),
@@ -387,7 +391,11 @@ def write_to_db(uspto_patent, db=None):
     uspto_db_entry += [
         uspto_patent['publication_title'],
         uspto_patent['publication_date'],
+        uspto_patent['publication_type'],
+        uspto_patent['grant_date'],
+        uspto_patent['application_num'],
         uspto_patent['application_type'],
+        uspto_patent['application_date'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
         ','.join(uspto_patent['attorneys']),
@@ -411,19 +419,24 @@ def write_to_db(uspto_patent, db=None):
         db_cursor.execute("INSERT INTO uspto_patents ("
                           + "publication_title, publication_number, "
                           + "publication_date, publication_type, "
+                          + "grant_date, application_num, application_type, application_date, "
                           + "authors, organizations, attorneys, attorney_organizations, "
                           + "sections, section_classes, section_class_subclasses, "
                           + "section_class_subclass_groups, "
                           + "abstract, description, claims, "
                           + "created_at, updated_at"
                           + ") VALUES ("
-                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                          + "%s, %s, %s, %s, %s, %s, %s, %s) "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                           + "ON CONFLICT(publication_number) "
                           + "DO UPDATE SET "
                           + "publication_title=%s, "
                           + "publication_date=%s, "
                           + "publication_type=%s, "
+                          + "grant_date=%s, "
+                          + "application_num=%s, "
+                          + "application_type=%s, "
+                          + "application_date=%s, "
                           + "authors=%s, "
                           + "attorneys=%s, "
                           + "attorney_organizations=%s, "

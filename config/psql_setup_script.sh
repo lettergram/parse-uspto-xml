@@ -1,20 +1,22 @@
-DB_PASSWORD='enter password here.'
-DB_USER='patent_manager'
-DB_NAME='uspto_patents'
+DATABASE_PASS='enter password here.'
+DATABASE_USER='patent_manager'
+DATABASE_NAME='uspto_patents'
 
-psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASSWORD';"
-psql -c "CREATE DATABASE $DB_NAME;"
-psql -d $DB_NAME -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+psql -c "CREATE ROLE $DATABASE_USER WITH LOGIN PASSWORD '$DATABASE_PASS';"
+psql -c "CREATE DATABASE $DATABASE_NAME;"
+psql -d $DATABASE_NAME -c "GRANT ALL PRIVILEGES ON DATABASE $DATABASE_NAME TO $DATABASE_USER;"
 
 
-RUN_ON_MYDB="psql -X -U $DB_USER password='$DB_PASSWORD' -d $DB_NAME --set ON_ERROR_STOP=on"
-
-psql -X -U $DB_USER password='$DB_PASSWORD' -d $DB_NAME --set ON_ERROR_STOP=on << PSQL
+psql -X -U $DATABASE_USER password='$DATABASE_PASS' -d $DATABASE_NAME << PSQL
 CREATE TABLE uspto_patents(
        publication_number VARCHAR,
        publication_title VARCHAR,
        publication_date DATE,
        publication_type VARCHAR,
+       grant_date DATE,
+       application_num VARCHAR,
+       application_type VARCHAR,
+       application_date DATE,
        authors VARCHAR,
        organizations VARCHAR,
        attorneys VARCHAR,
@@ -35,7 +37,7 @@ CREATE INDEX idx_publication_date ON uspto_patents (publication_date);
 CREATE INDEX idx_publication_title ON uspto_patents ((lower(publication_title)));
 
 
-CREATE reference_document_types AS ENUM (
+CREATE TYPE reference_document_types AS ENUM (
     'continuation',
     'division',
     'continuation-in-part',
@@ -54,7 +56,6 @@ CREATE TABLE uspto_referential_documents(
    reference VARCHAR,
    document_type reference_document_types,
    cited_by_examiner BOOLEAN,
-   document_type TEXT,
    country VARCHAR,
    metadata jsonb,
    created_at TIMESTAMP without time zone,
