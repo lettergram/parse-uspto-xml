@@ -490,6 +490,11 @@ def write_referential_documents_to_db(document_list, db=None):
             return json.dumps(value)
         return value
 
+    def get_data_for_column(data, column):
+        if column in ["created_at", "updated_at"]:
+            return current_time
+        return data.get("column")
+
     # exclude_set_string = "({})".format(", ".join([
     #     "EXCLUDED.{:s}".format(col) for col in updateable_cols
     # ]))
@@ -503,7 +508,7 @@ def write_referential_documents_to_db(document_list, db=None):
                 # ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
                 # SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
         [
-            [ jsonify_dicts(data.get(column, current_time)) for column in columns ]
+            [ jsonify_dicts(get_data_for_column(data, column)) for column in columns ]
                 for data in document_list
         ]
     )
