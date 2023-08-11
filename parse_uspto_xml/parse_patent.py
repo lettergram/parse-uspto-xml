@@ -495,8 +495,9 @@ def write_referential_documents_to_db(document_list, db=None):
         f"""INSERT INTO uspto_referential_documents {tuple_creator(columns)}
                 VALUES
                     %s
-                ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
-                SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
+                ON CONFLICT DO NOTHING""",
+                # ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
+                # SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
         [
             [ jsonify_dicts(data.get(column, current_time)) for column in columns ]
                 for data in document_list
