@@ -15,7 +15,6 @@ CREATE TABLE uspto_patents(
        publication_type VARCHAR,
        grant_date DATE,
        application_num VARCHAR,
-       application_type VARCHAR,
        application_date DATE,
        authors VARCHAR,
        organizations VARCHAR,
@@ -60,7 +59,7 @@ CREATE TABLE uspto_referential_documents(
    metadata jsonb,
    created_at TIMESTAMP without time zone,
    updated_at TIMESTAMP without time zone,
-   CONSTRAINT patent_reference UNIQUE (uspto_publication_number, reference)
+   CONSTRAINT patent_reference UNIQUE (uspto_publication_number, reference, document_type)
 );
 
 CREATE INDEX uspto_publication_number ON uspto_referential_documents (uspto_publication_number);

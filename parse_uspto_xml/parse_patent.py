@@ -10,6 +10,7 @@ import traceback
 from typing import Union
 
 from bs4 import BeautifulSoup
+import psycopg2.extras
 
 # load the psycopg to connect to postgresql
 from parse_uspto_xml import setup_loggers
@@ -64,7 +65,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     related_docs_bs = bs.find("us-related-documents")
     for related_doc_bs in (related_docs_bs.find_all(recursive=False) if related_docs_bs else []):
         related_doc = {
-            "publication_number": publication_num,
+            "uspto_publication_number": publication_num,
             "reference": None,
             "cited_by_examiner": None,
             "document_type": None,
@@ -113,7 +114,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
             doc_bs = ref_bs.find("document-id")
             if doc_bs:
                 reference = {
-                    "publication_number": publication_num,
+                    "uspto_publication_number": publication_num,
                     "reference": doc_bs.find("doc-number").text,
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
                     "document_type": "patent-reference",
@@ -126,7 +127,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
                 }
             else:
                 reference = {
-                    "publication_number": publication_num,
+                    "uspto_publication_number": publication_num,
                     "reference": ref_bs.find("othercit").text,
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
                     "document_type": "other-reference",
@@ -141,7 +142,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     if priority_docs_bs:
         for doc_bs in priority_docs_bs.find_all("priority-claim"):
             priority_claims.append({
-                "publication_number": publication_num,
+                "uspto_publication_number": publication_num,
                 "reference": doc_bs.find("doc-number").text,
                 "cited_by_examiner": False,
                 "document_type": "other-reference",
@@ -155,7 +156,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     # check to make sure all keys are proper -- TODO: this should be a test.
     for reference in referential_documents:
         expected_keys = {
-            "publication_number",
+            "uspto_publication_number",
             "reference",
             "cited_by_examiner",
             "document_type",
@@ -340,7 +341,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     return uspto_patent
 
 
-def write_to_db(uspto_patent, db=None):
+def write_patent_to_db(uspto_patent, db=None):
 
     """
     import pprint
@@ -367,10 +368,9 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['publication_title'],
         uspto_patent['publication_number'],
         uspto_patent['publication_date'],
-        uspto_patent['publication_type'],
+        uspto_patent['application_type'],
         uspto_patent['grant_date'],
         uspto_patent['application_num'],
-        uspto_patent['application_type'],
         uspto_patent['application_date'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
@@ -391,10 +391,9 @@ def write_to_db(uspto_patent, db=None):
     uspto_db_entry += [
         uspto_patent['publication_title'],
         uspto_patent['publication_date'],
-        uspto_patent['publication_type'],
+        uspto_patent['application_type'],
         uspto_patent['grant_date'],
         uspto_patent['application_num'],
-        uspto_patent['application_type'],
         uspto_patent['application_date'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
@@ -419,14 +418,14 @@ def write_to_db(uspto_patent, db=None):
         db_cursor.execute("INSERT INTO uspto_patents ("
                           + "publication_title, publication_number, "
                           + "publication_date, publication_type, "
-                          + "grant_date, application_num, application_type, application_date, "
+                          + "grant_date, application_num, application_date, "
                           + "authors, organizations, attorneys, attorney_organizations, "
                           + "sections, section_classes, section_class_subclasses, "
                           + "section_class_subclass_groups, "
                           + "abstract, description, claims, "
                           + "created_at, updated_at"
                           + ") VALUES ("
-                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
                           + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                           + "ON CONFLICT(publication_number) "
                           + "DO UPDATE SET "
@@ -435,7 +434,6 @@ def write_to_db(uspto_patent, db=None):
                           + "publication_type=%s, "
                           + "grant_date=%s, "
                           + "application_num=%s, "
-                          + "application_type=%s, "
                           + "application_date=%s, "
                           + "authors=%s, "
                           + "attorneys=%s, "
@@ -447,6 +445,63 @@ def write_to_db(uspto_patent, db=None):
                           + "abstract=%s, description=%s, "
                           + "claims=%s, updated_at=%s", uspto_db_entry)
 
+    return
+
+
+def write_referential_documents_to_db(document_list, db=None):
+    """"""
+    # Will use for created_at & updated_at time
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+    db_cursor = None
+    if db is not None:
+        db_cursor = db.obtain_db_cursor()
+
+    if db_cursor is None:
+        return
+
+    columns = [
+        "uspto_publication_number",
+        "reference",
+        "cited_by_examiner",
+        "document_type",
+        "country",
+        "metadata",
+        "created_at",
+        "updated_at",
+    ]
+    read_only_cols = {"created_at"}
+    conflict_columns = {"uspto_publication_number", "reference", "document_type"}
+    updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
+
+    def tuple_creator(values):
+        n_values = len(values)
+        format_str = ', '.join(["\"{}\""] * n_values)
+        return f"({format_str})".format(*values)
+
+    def jsonify_dicts(value):
+        if isinstance(value, dict):
+            return json.dumps(value)
+        return value
+
+    exclude_set_string = "({})".format(", ".join([
+        "EXCLUDED.{:s}".format(col) for col in updateable_cols
+    ]))
+
+    psycopg2.extras.execute_values(
+        db_cursor,
+        f"""INSERT INTO uspto_referential_documents {tuple_creator(columns)}
+                VALUES
+                    %s
+                ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
+                SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
+        [
+            [ jsonify_dicts(data.get(column, current_time)) for column in columns ]
+                for data in document_list
+        ]
+    )
+    logger.info(f"DB UPSERT message: {db_cursor.statusmessage}")
     return
 
 
@@ -522,7 +577,10 @@ def load_local_files(
                 if isinstance(push_to, str) and push_to.endswith(".jsonl"):
                     patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
                 elif isinstance(push_to, PGDBInterface):
-                    write_to_db(uspto_patent, db=push_to)
+                    write_patent_to_db(uspto_patent, db=push_to)
+                    write_referential_documents_to_db(
+                        uspto_patent["referential_documents"], db=push_to
+                    )
                 success_count += 1
                 file_success_count += 1
             except Exception as e:
