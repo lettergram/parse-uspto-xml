@@ -493,7 +493,7 @@ def write_referential_documents_to_db(document_list, db=None):
     def get_data_for_column(data, column):
         if column in ["created_at", "updated_at"]:
             return current_time
-        return data.get("column")
+        return data.get(column)
 
     # exclude_set_string = "({})".format(", ".join([
     #     "EXCLUDED.{:s}".format(col) for col in updateable_cols
