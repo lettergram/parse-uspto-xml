@@ -70,6 +70,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
             "cited_by_examiner": None,
             "document_type": None,
             "country": None,
+            "kind": None,
             "metadata": {}
         }
         if related_doc_bs.name in ["continuation", "division", "continuation-in-part", "reissue", "substitution"]:
@@ -101,7 +102,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
             related_doc["cited_by_examiner"] = False
             related_doc["reference"] = related_doc_bs.find("doc-number").text
             related_doc["country"] = related_doc_bs.find("country").text
-            related_doc["metadata"]["kind"] = related_doc_bs.find("kind").text
+            related_doc["kind"] = related_doc_bs.find("kind").text
             related_doc["metadata"]["date"] = related_doc_bs.find("date").text
         else:
             raise KeyError(f"'{related_doc_bs.name}' is not setup to be included in referential documents.")
@@ -119,9 +120,9 @@ def parse_uspto_file(bs, keep_log: bool = False):
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
                     "document_type": "patent-reference",
                     "country": getattr(doc_bs.find("country"), "text", None),
+                    "kind": getattr(doc_bs.find("kind"), "text", None),
                     "metadata":{
                         "name": getattr(doc_bs.find("name"), "text", None),
-                        "kind": getattr(doc_bs.find("kind"), "text", None),
                         "date": getattr(doc_bs.find("date"), "text", None),
                     }
                 }
@@ -132,7 +133,8 @@ def parse_uspto_file(bs, keep_log: bool = False):
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
                     "document_type": "other-reference",
                     "country": getattr(ref_bs.find("country"), "text", None),
-                    "metadata":{}
+                    "kind": None,
+                    "metadata": {},
                 }
             references.append(reference)
         referential_documents += references
@@ -147,6 +149,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
                 "cited_by_examiner": False,
                 "document_type": "other-reference",
                 "country": getattr(doc_bs.find("country"), "text", None),
+                "kind": None,
                 "metadata":{
                     "date": getattr(doc_bs.find("date"), "text", None),
                 },
@@ -161,7 +164,8 @@ def parse_uspto_file(bs, keep_log: bool = False):
             "cited_by_examiner",
             "document_type",
             "country",
-            "metadata"
+            "kind",
+            "metadata",
         }
         missing_keys = expected_keys - set(reference.keys())
         bad_keys =  set(reference.keys()) - expected_keys
@@ -471,10 +475,10 @@ def write_referential_documents_to_db(document_list, db=None):
         "created_at",
         "updated_at",
     ]
-    read_only_cols = {"created_at"}
-    conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "metadata"}
-    updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
-    conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "(metadata->>'kind')"}
+    # read_only_cols = {"created_at"}
+    # conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "kind"}
+    # updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
+    # conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "kind"}
 
     def tuple_creator(values):
         n_values = len(values)
@@ -486,9 +490,9 @@ def write_referential_documents_to_db(document_list, db=None):
             return json.dumps(value)
         return value
 
-    exclude_set_string = "({})".format(", ".join([
-        "EXCLUDED.{:s}".format(col) for col in updateable_cols
-    ]))
+    # exclude_set_string = "({})".format(", ".join([
+    #     "EXCLUDED.{:s}".format(col) for col in updateable_cols
+    # ]))
 
     psycopg2.extras.execute_values(
         db_cursor,
@@ -614,7 +618,7 @@ if __name__ == "__main__":
     _arg_filenames = []
     if len(sys.argv) > 1:
         _arg_filenames = sys.argv[1:]
-
+    _arg_filenames = "../embedding-testing-suite/data/2022/ipg220104.xml"
 
     _db_config_file = "config/postgres.tsv"
     _db = PGDBInterface(config_file=_db_config_file)

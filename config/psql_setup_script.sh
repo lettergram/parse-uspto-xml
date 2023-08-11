@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS uspto_referential_documents(
    document_type reference_document_types,
    cited_by_examiner BOOLEAN,
    country VARCHAR,
+   kind VARCHAR,
    metadata jsonb,
    created_at TIMESTAMP without time zone,
    updated_at TIMESTAMP without time zone
@@ -73,14 +74,12 @@ BEGIN
     IF (select Substr(setting, 1, strpos(setting, '.')-1) from pg_settings where name = 'server_version')::INTEGER = 15 THEN
         --FOR PSQL >= 15 which allows null not distinct
         --CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint on uspto_referential_documents
-        --    (uspto_publication_number, reference, document_type, country, (metadata->>'kind')) NULLS NOT DISTINCT;
-        RAISE WARNING "UNCOMMENT THIS SECTION FOR PSQL>=15; NO INDEXES APPLIED"
+        --    (uspto_publication_number, reference, document_type, country, (kind)) NULLS NOT DISTINCT;
+        RAISE WARNING 'UNCOMMENT THIS SECTION FOR PSQL>=15; NO INDEXES APPLIED';
     ELSE
         --FOR PSQL < 15
         CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_null on uspto_referential_documents
-            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, '')) WHERE (metadata->>'kind') is NULL;
-        CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_not_null on uspto_referential_documents
-            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, ''), (metadata->>'kind')) WHERE (metadata->>'kind') is NOT NULL;
+            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, ''), COALESCE(kind, ''));
     END IF;
 END
 \$\$;

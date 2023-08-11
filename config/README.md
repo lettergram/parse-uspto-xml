@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS uspto_referential_documents(
    document_type reference_document_types,
    cited_by_examiner BOOLEAN,
    country VARCHAR,
+   kind VARCHAR,
    metadata jsonb,
    created_at TIMESTAMP without time zone,
    updated_at TIMESTAMP without time zone
@@ -119,9 +120,7 @@ BEGIN
     ELSE
         --FOR PSQL < 15
         CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_null on uspto_referential_documents
-            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, '')) WHERE (metadata->>'kind') is NULL;
-        CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_not_null on uspto_referential_documents
-            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, ''), (metadata->>'kind')) WHERE (metadata->>'kind') is NOT NULL;
+            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, ''), COALESCE(kind, ''));
     END IF;
 END
 $$;
