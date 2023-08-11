@@ -444,7 +444,7 @@ def write_patent_to_db(uspto_patent, db=None):
                           + "section_class_subclass_groups=%s, "
                           + "abstract=%s, description=%s, "
                           + "claims=%s, updated_at=%s", uspto_db_entry)
-
+        logger.debug(f"DB UPSERT message: {db_cursor.statusmessage}")
     return
 
 
@@ -501,7 +501,7 @@ def write_referential_documents_to_db(document_list, db=None):
                 for data in document_list
         ]
     )
-    logger.info(f"DB UPSERT message: {db_cursor.statusmessage}")
+    logger.debug(f"DB UPSERT message: {db_cursor.statusmessage}")
     return
 
 
