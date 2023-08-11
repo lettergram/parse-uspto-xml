@@ -472,6 +472,7 @@ def write_referential_documents_to_db(document_list, db=None):
         "document_type",
         "country",
         "metadata",
+        "kind",
         "created_at",
         "updated_at",
     ]
