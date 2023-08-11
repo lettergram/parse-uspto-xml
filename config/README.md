@@ -7,6 +7,24 @@ This document provides a guide on how to setup / configure a PostgreSQL database
 
 This application currently requires postgreSQL to function, below is a method for creating the database and user such that it will be able to use the appropriate functionality. Note, the commands must be ran from a postgreSQL user who has a superuser privilege.
 
+#### Script setup
+Instead of manually setting up the databse, one can use the script `psql_setup_script.sh`.
+
+First update the env vars at the top of the file:
+```
+DATABASE_PASS='enter password here.'
+DATABASE_USER='patent_manager'
+DATABASE_NAME='uspto_patents'
+```
+
+Then execute the script:
+```console
+chmod +x psql_setup_script.sh
+./psql_setup_script.sh
+```
+
+#### Manual Setup
+
 **Create Role**
 ```
 CREATE ROLE patent_manager WITH LOGIN PASSWORD 'enter password here.';
@@ -49,6 +67,37 @@ CREATE TABLE uspto_patents(
        updated_at TIMESTAMP without time zone,
        PRIMARY KEY(publication_number)
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reference_document_types') THEN
+        CREATE TYPE reference_document_types AS ENUM (
+            'continuation',
+            'division',
+            'continuation-in-part',
+            'reissue',
+            'substitution',
+            'provisional',
+            'prior',
+            'priority-claim',
+            'patent-reference',
+            'other-reference'
+        );
+    END IF;
+END
+$$;
+
+CREATE TABLE IF NOT EXISTS uspto_referential_documents(
+   id SERIAL PRIMARY KEY,
+   uspto_publication_number VARCHAR REFERENCES uspto_patents (publication_number),
+   reference VARCHAR,
+   document_type reference_document_types,
+   cited_by_examiner BOOLEAN,
+   country VARCHAR,
+   metadata jsonb,
+   created_at TIMESTAMP without time zone,
+   updated_at TIMESTAMP without time zone
+);
 ```
 
 At this point the script(s) in this repository will work. However, if we wish to search the table, we should add indexes:
@@ -57,6 +106,25 @@ At this point the script(s) in this repository will work. However, if we wish to
 ```
 CREATE INDEX idx_publication_date ON uspto_patents (publication_date);
 CREATE INDEX idx_publication_title ON uspto_patents ((lower(publication_title)));
+
+CREATE INDEX IF NOT EXISTS uspto_publication_number ON uspto_referential_documents (uspto_publication_number);
+
+DO $$
+BEGIN
+    IF (select Substr(setting, 1, strpos(setting, '.')-1) from pg_settings where name = 'server_version')::INTEGER = 15 THEN
+        --FOR PSQL >= 15 which allows null not distinct
+        --CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint on uspto_referential_documents
+        --    (uspto_publication_number, reference, document_type, country, (metadata->>'kind')) NULLS NOT DISTINCT;
+        RAISE WARNING "UNCOMMENT THIS SECTION FOR PSQL>=15; NO INDEXES APPLIED"
+    ELSE
+        --FOR PSQL < 15
+        CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_null on uspto_referential_documents
+            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, '')) WHERE (metadata->>'kind') is NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_not_null on uspto_referential_documents
+            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, ''), (metadata->>'kind')) WHERE (metadata->>'kind') is NOT NULL;
+    END IF;
+END
+$$;
 ```
 
 **Optional indexes to improve search speeds (text searches)**
