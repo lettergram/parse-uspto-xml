@@ -472,8 +472,9 @@ def write_referential_documents_to_db(document_list, db=None):
         "updated_at",
     ]
     read_only_cols = {"created_at"}
-    conflict_columns = {"uspto_publication_number", "reference", "document_type"}
+    conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "metadata"}
     updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
+    conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "(metadata->>'kind')"}
 
     def tuple_creator(values):
         n_values = len(values)
