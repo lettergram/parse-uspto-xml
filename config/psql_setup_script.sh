@@ -8,7 +8,7 @@ psql -d $DATABASE_NAME -c "GRANT ALL PRIVILEGES ON DATABASE $DATABASE_NAME TO $D
 
 
 psql -X -U $DATABASE_USER password='$DATABASE_PASS' -d $DATABASE_NAME << PSQL
-CREATE TABLE uspto_patents(
+CREATE TABLE IF NOT EXISTS uspto_patents(
        publication_number VARCHAR,
        publication_title VARCHAR,
        publication_date DATE,
@@ -32,24 +32,29 @@ CREATE TABLE uspto_patents(
        PRIMARY KEY(publication_number)
 );
 
-CREATE INDEX idx_publication_date ON uspto_patents (publication_date);
-CREATE INDEX idx_publication_title ON uspto_patents ((lower(publication_title)));
+CREATE INDEX IF NOT EXISTS idx_publication_date ON uspto_patents (publication_date);
+CREATE INDEX IF NOT EXISTS idx_publication_title ON uspto_patents ((lower(publication_title)));
 
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reference_document_types') THEN
+        CREATE TYPE reference_document_types AS ENUM (
+            'continuation',
+            'division',
+            'continuation-in-part',
+            'reissue',
+            'substitution',
+            'provisional',
+            'prior',
+            'priority-claim',
+            'patent-reference',
+            'other-reference'
+        );
+    END IF;
+END
+\$\$;
 
-CREATE TYPE reference_document_types AS ENUM (
-    'continuation',
-    'division',
-    'continuation-in-part',
-    'reissue',
-    'substitution',
-    'provisional',
-    'prior',
-    'priority-claim',
-    'patent-reference',
-    'other-reference'
-);
-
-CREATE TABLE uspto_referential_documents(
+CREATE TABLE IF NOT EXISTS uspto_referential_documents(
    id SERIAL PRIMARY KEY,
    uspto_publication_number VARCHAR REFERENCES uspto_patents (publication_number),
    reference VARCHAR,
@@ -58,10 +63,26 @@ CREATE TABLE uspto_referential_documents(
    country VARCHAR,
    metadata jsonb,
    created_at TIMESTAMP without time zone,
-   updated_at TIMESTAMP without time zone,
-   CONSTRAINT patent_reference UNIQUE (uspto_publication_number, reference, document_type)
+   updated_at TIMESTAMP without time zone
 );
 
-CREATE INDEX uspto_publication_number ON uspto_referential_documents (uspto_publication_number);
+CREATE INDEX IF NOT EXISTS uspto_publication_number ON uspto_referential_documents (uspto_publication_number);
+
+DO \$\$
+BEGIN
+    IF (select Substr(setting, 1, strpos(setting, '.')-1) from pg_settings where name = 'server_version')::INTEGER = 15 THEN
+        --FOR PSQL >= 15 which allows null not distinct
+        --CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint on uspto_referential_documents
+        --    (uspto_publication_number, reference, document_type, country, (metadata->>'kind')) NULLS NOT DISTINCT;
+        RAISE WARNING "UNCOMMENT THIS SECTION FOR PSQL>=15; NO INDEXES APPLIED"
+    ELSE
+        --FOR PSQL < 15
+        CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_null on uspto_referential_documents
+            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, '')) WHERE (metadata->>'kind') is NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint_not_null on uspto_referential_documents
+            (uspto_publication_number, COALESCE(reference, ''), document_type, COALESCE(country, ''), (metadata->>'kind')) WHERE (metadata->>'kind') is NOT NULL;
+    END IF;
+END
+\$\$;
 
 PSQL
