@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import html
 import json
@@ -8,6 +10,7 @@ import traceback
 from typing import Union
 
 from bs4 import BeautifulSoup
+import psycopg2.extras
 
 # load the psycopg to connect to postgresql
 from parse_uspto_xml import setup_loggers
@@ -19,11 +22,11 @@ setup_loggers.setup_root_logger()
 logger = setup_loggers.setup_file_logger(__file__)
 
 
-def get_filenames_from_dir(dirpaths: list):
+def get_filenames_from_dir(dirpaths: list | str):
     """Get filenames from directory"""
 
-    if len(dirpaths) == 1 and not dirpaths[0][-1] == '/':
-        return dirpaths
+    if isinstance(dirpaths, str):
+        dirpaths = [dirpaths]
 
     filenames = []
     for dirpath in dirpaths:
@@ -37,7 +40,7 @@ def get_filenames_from_dir(dirpaths: list):
                     dir_filenames = get_filenames_from_dir([fullpath])
                 filenames += dir_filenames
         else:
-            filenames += dirpath
+            filenames += [dirpath]
     return filenames
 
 
@@ -46,10 +49,132 @@ def parse_uspto_file(bs, keep_log: bool = False):
     Parses a USPTO patent in a BeautifulSoup object.
     """
 
+    grant_date = bs.get("date-produced", None)
+
     publication_title = bs.find('invention-title').text
     publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
-    application_type = bs.find('application-reference')['appl-type']
+    application_ref_bs = bs.find('application-reference')
+    application_type = application_ref_bs['appl-type']
+    application_date = application_ref_bs.find('date').text
+    application_num = application_ref_bs.find('doc-number').text
+
+    referential_documents = []
+    # {uspto_patents.publication_number,reference,cited_by_examiner,document_type,country,metadata (JSON)
+
+    related_docs_bs = bs.find("us-related-documents")
+    for related_doc_bs in (related_docs_bs.find_all(recursive=False) if related_docs_bs else []):
+        related_doc = {
+            "uspto_publication_number": publication_num,
+            "reference": None,
+            "cited_by_examiner": None,
+            "document_type": None,
+            "country": None,
+            "kind": None,
+            "metadata": {}
+        }
+        if related_doc_bs.name in ["continuation", "division", "continuation-in-part", "reissue", "substitution"]:
+            related_doc["document_type"] = related_doc_bs.name
+            related_doc["cited_by_examiner"] = False
+            for documents_bs in related_doc_bs.find_all(re.compile("(parent|child)-doc(ument)?$")):
+                for doc_bs in documents_bs.find_all("document-id"):
+                    if doc_bs.parent.name == "parent-grant-document":
+                        related_doc["reference"] = doc_bs.find("doc-number").text
+                    elif doc_bs.parent.name == "parent-pct-document":
+                        related_doc["metadata"]["parent_pct_number"] = doc_bs.find("doc-number").text
+                        related_doc["metadata"]["parent_pct_country"] = doc_bs.find("country").text
+                        related_doc["metadata"]["parent_pct_date"] = getattr(doc_bs.find("date"), "text", None)
+                    elif doc_bs.parent.name == "parent-doc":
+                        related_doc["country"] = doc_bs.find("country").text
+                        related_doc["metadata"]["application_number"] = doc_bs.find("doc-number").text
+                        related_doc["metadata"]["application_date"] = getattr(doc_bs.find("date"), "text", None)
+                    elif doc_bs.parent.name == "child-doc":
+                        related_doc["metadata"]["child_application_number"] = doc_bs.find("doc-number").text
+                        related_doc["metadata"]["parent_country"] = doc_bs.find("country").text
+        elif related_doc_bs.name in ["us-provisional-application"]:
+            related_doc["document_type"] = "provisional"
+            related_doc["cited_by_examiner"] = False
+            related_doc["country"] = related_doc_bs.find("country").text
+            related_doc["reference"] = related_doc_bs.find("doc-number").text
+            related_doc["metadata"]["application_date"] = related_doc_bs.find("date").text
+        elif related_doc_bs.name in ["related-publication"]:
+            related_doc["document_type"] = "prior"
+            related_doc["cited_by_examiner"] = False
+            related_doc["reference"] = related_doc_bs.find("doc-number").text
+            related_doc["country"] = related_doc_bs.find("country").text
+            related_doc["kind"] = related_doc_bs.find("kind").text
+            related_doc["metadata"]["date"] = related_doc_bs.find("date").text
+        else:
+            raise KeyError(f"'{related_doc_bs.name}' is not setup to be included in referential documents.")
+        referential_documents.append(related_doc)
+
+    references = []
+    refs_cited_bs = bs.find(re.compile(".*-references-cited"))
+    if refs_cited_bs:
+        for ref_bs in refs_cited_bs.find_all(re.compile(".*-citation")):
+            doc_bs = ref_bs.find("document-id")
+            if doc_bs:
+                reference = {
+                    "uspto_publication_number": publication_num,
+                    "reference": doc_bs.find("doc-number").text,
+                    "cited_by_examiner": "examiner" in ref_bs.find("category").text,
+                    "document_type": "patent-reference",
+                    "country": getattr(doc_bs.find("country"), "text", None),
+                    "kind": getattr(doc_bs.find("kind"), "text", None),
+                    "metadata":{
+                        "name": getattr(doc_bs.find("name"), "text", None),
+                        "date": getattr(doc_bs.find("date"), "text", None),
+                    }
+                }
+            else:
+                reference = {
+                    "uspto_publication_number": publication_num,
+                    "reference": ref_bs.find("othercit").text,
+                    "cited_by_examiner": "examiner" in ref_bs.find("category").text,
+                    "document_type": "other-reference",
+                    "country": getattr(ref_bs.find("country"), "text", None),
+                    "kind": None,
+                    "metadata": {},
+                }
+            references.append(reference)
+        referential_documents += references
+
+    priority_claims = []
+    priority_docs_bs = bs.find("priority-claims")
+    if priority_docs_bs:
+        for doc_bs in priority_docs_bs.find_all("priority-claim"):
+            priority_claims.append({
+                "uspto_publication_number": publication_num,
+                "reference": doc_bs.find("doc-number").text,
+                "cited_by_examiner": False,
+                "document_type": "other-reference",
+                "country": getattr(doc_bs.find("country"), "text", None),
+                "kind": None,
+                "metadata":{
+                    "date": getattr(doc_bs.find("date"), "text", None),
+                },
+            })
+        referential_documents += priority_claims
+
+    # check to make sure all keys are proper -- TODO: this should be a test.
+    for reference in referential_documents:
+        expected_keys = {
+            "uspto_publication_number",
+            "reference",
+            "cited_by_examiner",
+            "document_type",
+            "country",
+            "kind",
+            "metadata",
+        }
+        missing_keys = expected_keys - set(reference.keys())
+        bad_keys =  set(reference.keys()) - expected_keys
+        if missing_keys or bad_keys:
+            raise KeyError(
+                f"referential_documents has missing_keys: "
+                f"{missing_keys} and bad_keys: {bad_keys} "
+                f"for {reference}"
+            )
 
     # International Patent Classification (IPC) Docs:
     # https://www.wipo.int/classifications/ipc/en/
@@ -148,11 +273,15 @@ def parse_uspto_file(bs, keep_log: bool = False):
         "publication_title": publication_title,
         "publication_number": publication_num,
         "publication_date": publication_date,
+        "grant_date": grant_date,
+        "application_num": application_num,
         "application_type": application_type,
+        "application_date": application_date,
         "authors": authors, # list
         "organizations": organizations, # list
         "attorneys": attorneys, # list
         "attorney_organizations": attorney_organizations, # list
+        "referential_documents": referential_documents,
         "sections": list(sections.keys()),
         "section_classes": list(section_classes.keys()),
         "section_class_subclasses": list(section_class_subclasses.keys()),
@@ -216,7 +345,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     return uspto_patent
 
 
-def write_to_db(uspto_patent, db=None):
+def write_patent_to_db(uspto_patent, db=None):
 
     """
     import pprint
@@ -244,6 +373,9 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['publication_number'],
         uspto_patent['publication_date'],
         uspto_patent['application_type'],
+        uspto_patent['grant_date'],
+        uspto_patent['application_num'],
+        uspto_patent['application_date'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
         ','.join(uspto_patent['attorneys']),
@@ -264,6 +396,9 @@ def write_to_db(uspto_patent, db=None):
         uspto_patent['publication_title'],
         uspto_patent['publication_date'],
         uspto_patent['application_type'],
+        uspto_patent['grant_date'],
+        uspto_patent['application_num'],
+        uspto_patent['application_date'],
         ','.join(uspto_patent['authors']),
         ','.join(uspto_patent['organizations']),
         ','.join(uspto_patent['attorneys']),
@@ -287,19 +422,23 @@ def write_to_db(uspto_patent, db=None):
         db_cursor.execute("INSERT INTO uspto_patents ("
                           + "publication_title, publication_number, "
                           + "publication_date, publication_type, "
+                          + "grant_date, application_num, application_date, "
                           + "authors, organizations, attorneys, attorney_organizations, "
                           + "sections, section_classes, section_class_subclasses, "
                           + "section_class_subclass_groups, "
                           + "abstract, description, claims, "
                           + "created_at, updated_at"
                           + ") VALUES ("
-                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                          + "%s, %s, %s, %s, %s, %s, %s, %s) "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                           + "ON CONFLICT(publication_number) "
                           + "DO UPDATE SET "
                           + "publication_title=%s, "
                           + "publication_date=%s, "
                           + "publication_type=%s, "
+                          + "grant_date=%s, "
+                          + "application_num=%s, "
+                          + "application_date=%s, "
                           + "authors=%s, "
                           + "attorneys=%s, "
                           + "attorney_organizations=%s, "
@@ -309,7 +448,71 @@ def write_to_db(uspto_patent, db=None):
                           + "section_class_subclass_groups=%s, "
                           + "abstract=%s, description=%s, "
                           + "claims=%s, updated_at=%s", uspto_db_entry)
+        logger.debug(f"DB UPSERT message: {db_cursor.statusmessage}")
+    return
 
+
+def write_referential_documents_to_db(document_list, db=None):
+    """"""
+    # Will use for created_at & updated_at time
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+    db_cursor = None
+    if db is not None:
+        db_cursor = db.obtain_db_cursor()
+
+    if db_cursor is None:
+        return
+
+    columns = [
+        "uspto_publication_number",
+        "reference",
+        "cited_by_examiner",
+        "document_type",
+        "country",
+        "metadata",
+        "created_at",
+        "updated_at",
+    ]
+    # read_only_cols = {"created_at"}
+    # conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "kind"}
+    # updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
+    # conflict_columns = {"uspto_publication_number", "reference", "document_type", "country", "kind"}
+
+    def tuple_creator(values):
+        n_values = len(values)
+        format_str = ', '.join(["\"{}\""] * n_values)
+        return f"({format_str})".format(*values)
+
+    def jsonify_dicts(value):
+        if isinstance(value, dict):
+            return json.dumps(value)
+        return value
+
+    def get_data_for_column(data, column):
+        if column in ["created_at", "updated_at"]:
+            return current_time
+        return data.get("column")
+
+    # exclude_set_string = "({})".format(", ".join([
+    #     "EXCLUDED.{:s}".format(col) for col in updateable_cols
+    # ]))
+
+    psycopg2.extras.execute_values(
+        db_cursor,
+        f"""INSERT INTO uspto_referential_documents {tuple_creator(columns)}
+                VALUES
+                    %s
+                ON CONFLICT DO NOTHING""",
+                # ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
+                # SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
+        [
+            [ jsonify_dicts(get_data_for_column(data, column)) for column in columns ]
+                for data in document_list
+        ]
+    )
+    logger.debug(f"DB UPSERT message: {db_cursor.statusmessage}")
     return
 
 
@@ -362,7 +565,7 @@ def load_local_files(
             if patent is None or patent == "":
                 continue
 
-            bs = BeautifulSoup(patent)
+            bs = BeautifulSoup(patent, "lxml")
 
             if bs.find('sequence-cwu') is not None:
                 continue # Skip DNA sequence documents
@@ -375,7 +578,7 @@ def load_local_files(
             try:
                 title = application.find('invention-title').text
             except Exception as e:
-                logger.error(f"Error at {count}: {str(e)}")
+                logger.error(f"Error at {count}: {str(e)}", e)
 
             try:
                 uspto_patent = parse_uspto_file(
@@ -385,13 +588,16 @@ def load_local_files(
                 if isinstance(push_to, str) and push_to.endswith(".jsonl"):
                     patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
                 elif isinstance(push_to, PGDBInterface):
-                    write_to_db(uspto_patent, db=push_to)
+                    write_patent_to_db(uspto_patent, db=push_to)
+                    write_referential_documents_to_db(
+                        uspto_patent["referential_documents"], db=push_to
+                    )
                 success_count += 1
                 file_success_count += 1
             except Exception as e:
                 exception_tuple = (count, title, e, traceback.format_exc())
                 errors.append(exception_tuple)
-                logger.error(f"Error: {exception_tuple}")
+                logger.error(f"Error: {exception_tuple}", e)
 
             if (success_count+len(errors)) % 50 == 0:
                 logger.info(f"{count}, {filename}, {title}")
@@ -407,7 +613,9 @@ def load_local_files(
         logger.error("\n\nErrors\n------------------------\n")
         for e in errors:
             logger.error(e)
-    logger.info(f"\n\nSuccess Count: {success_count}")
+    logger.info("=" * 50)
+    logger.info("=" * 50)
+    logger.info(f"Success Count: {success_count}")
     logger.info(f"Error Count: {len(errors)}")
 
 
@@ -415,7 +623,7 @@ if __name__ == "__main__":
     _arg_filenames = []
     if len(sys.argv) > 1:
         _arg_filenames = sys.argv[1:]
-
+    _arg_filenames = "../embedding-testing-suite/data/2022/ipg220104.xml"
 
     _db_config_file = "config/postgres.tsv"
     _db = PGDBInterface(config_file=_db_config_file)

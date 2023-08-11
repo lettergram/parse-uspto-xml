@@ -5,9 +5,13 @@ import ast
 # load the psycopg to connect to postgresql
 import psycopg2
 import psycopg2.extras
+from dotenv import load_dotenv
 
 from parse_uspto_xml.setup_loggers import setup_file_logger
 
+
+# load env vars
+load_dotenv()
 
 # setup file logger
 logger = setup_file_logger(__file__)

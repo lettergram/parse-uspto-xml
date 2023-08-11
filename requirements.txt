@@ -1,2 +1,4 @@
 bs4
 psycopg2-binary
+lxml
+python-dotenv
