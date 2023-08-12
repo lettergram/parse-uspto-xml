@@ -624,7 +624,6 @@ if __name__ == "__main__":
     _arg_filenames = []
     if len(sys.argv) > 1:
         _arg_filenames = sys.argv[1:]
-    _arg_filenames = "../embedding-testing-suite/data/2022/ipg220104.xml"
 
     _db_config_file = "config/postgres.tsv"
     _db = PGDBInterface(config_file=_db_config_file)
