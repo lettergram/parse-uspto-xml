@@ -16,20 +16,23 @@ The current script(s) only work on version 4.0 or higher of the XML (2005 - Pres
 
 It also will skip all documents with DNA sequences.
 
-**Step 2**: Extract the ziped file: `*.xml`
+**Step 2**: Extract the zipped file: `*.xml`
 
-**Step 3**: Install the package locally
+**Step 3**: Install the package locally with:
+
+```
 pip install -e .
+```
 
 **Step 4**: Individual patents (or directories) can then be parsed with:
 
 ```
-python prase_uspto_xml/parse_patent.py <filename.xml> <filename.xml> <directory>
+python parse_uspto_xml/parse_patent.py <filename.xml> <filename.xml> <directory>
 ```
 
 You can edit the `filename` variable in the python file `parse_patent.py` to match the unzipped file. Inside that file are typically thousands of patents which can be parsed for the given week.
 
-Using the `parse_patent.py` if you add a it will load all the  .xml files.
+Using the `parse_patent.py` if you add it will load all the  .xml files.
 
 ## Download all Files
 
@@ -49,7 +52,10 @@ bulkdata.uspto.gov/data/patent/grant/redbook/fulltext/<year>/<filename>.zip`
 
 It's recommended, to create a folder such as: `patent/<year>`, then execute the command to download all the `.zip` files.
 
-When all the files are downloaded it's possible to unzip all the directory: `unzip \*.zip`
+When all the files are downloaded it's possible to unzip all the directory with:
+```
+unzip \*.zip
+```
 
 ## Storing in Database
 
