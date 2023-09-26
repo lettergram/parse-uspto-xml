@@ -517,6 +517,82 @@ def write_referential_documents_to_db(document_list, db=None):
     return
 
 
+def load_from_data(
+        xml_text: str,
+        filename: str,
+        push_to: str | PGDBInterface,
+        max_patents: int | None = None,
+        keep_log: bool = False
+    ):
+
+    count = 0
+    success_count = 0
+    errors = []
+    patent_dumps_list = []
+
+    xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+    for patent in xml_splits:
+        if max_patents and success_count >= max_patents:
+            if success_count:
+                logger.info(f"{count}, {filename}, {title}")
+                if isinstance(push_to, str) and push_to.endswith(".jsonl"):
+                    with open(push_to, "a") as fp:
+                        fp.writelines(patent_dumps_list)
+                    patent_dumps_list = []
+                elif isinstance(push_to, PGDBInterface):
+                    push_to.commit_to_db()
+            break
+
+        if patent is None or patent == "":
+            continue
+
+        bs = BeautifulSoup(patent, "lxml")
+
+        if bs.find('sequence-cwu') is not None:
+            continue # Skip DNA sequence documents
+
+        application = bs.find('us-patent-application')
+        if application is None: # If no application, search for grant
+            application = bs.find('us-patent-grant')
+        title = "None"
+
+        try:
+            title = application.find('invention-title').text
+        except Exception as e:
+            logger.error(f"Error at {count}: {str(e)}", e)
+
+        try:
+            uspto_patent = parse_uspto_file(
+                bs=application,
+                keep_log=keep_log
+            )
+            if isinstance(push_to, str) and push_to.endswith(".jsonl"):
+                patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
+            elif isinstance(push_to, PGDBInterface):
+                write_patent_to_db(uspto_patent, db=push_to)
+                write_referential_documents_to_db(
+                    uspto_patent["referential_documents"], db=push_to
+                )
+            success_count += 1
+        except Exception as e:
+            exception_tuple = (count, title, e, traceback.format_exc())
+            errors.append(exception_tuple)
+            logger.error(f"Error: {exception_tuple}", e)
+
+        if (success_count+len(errors)) % 50 == 0:
+            logger.info(f"{count}, {filename}, {title}")
+            if isinstance(push_to, str) and push_to.endswith(".jsonl"):
+                with open(push_to, "a") as fp:
+                    fp.writelines(patent_dumps_list)
+                patent_dumps_list = []
+            elif isinstance(push_to, PGDBInterface):
+                push_to.commit_to_db()
+
+        count += 1
+
+    return count, success_count, errors
+
+
 def load_local_files(
         dirpath_list:  list,
         limit_per_file: Union[int, None] = None,
@@ -538,77 +614,26 @@ def load_local_files(
         logger.error(push_to_error)
         raise ValueError(push_to_error)
 
-    count = 1
+    count = 0
     success_count = 0
     errors = []
-    patent_dumps_list = []
     for filename in filenames:
-        file_success_count = 0
         if not filename.endswith(".xml"):
             continue
 
         with open(filename, "r") as fp:
             xml_text = html.unescape(fp.read())
 
-        xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-        for patent in xml_splits:
-            if limit_per_file and file_success_count >= limit_per_file:
-                if file_success_count:
-                    logger.info(f"{count}, {filename}, {title}")
-                    if isinstance(push_to, str) and push_to.endswith(".jsonl"):
-                        with open(push_to, "a") as fp:
-                            fp.writelines(patent_dumps_list)
-                        patent_dumps_list = []
-                    elif isinstance(push_to, PGDBInterface):
-                        push_to.commit_to_db()
-                break
-
-            if patent is None or patent == "":
-                continue
-
-            bs = BeautifulSoup(patent, "lxml")
-
-            if bs.find('sequence-cwu') is not None:
-                continue # Skip DNA sequence documents
-
-            application = bs.find('us-patent-application')
-            if application is None: # If no application, search for grant
-                application = bs.find('us-patent-grant')
-            title = "None"
-
-            try:
-                title = application.find('invention-title').text
-            except Exception as e:
-                logger.error(f"Error at {count}: {str(e)}", e)
-
-            try:
-                uspto_patent = parse_uspto_file(
-                    bs=application,
-                    keep_log=keep_log
-                )
-                if isinstance(push_to, str) and push_to.endswith(".jsonl"):
-                    patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
-                elif isinstance(push_to, PGDBInterface):
-                    write_patent_to_db(uspto_patent, db=push_to)
-                    write_referential_documents_to_db(
-                        uspto_patent["referential_documents"], db=push_to
-                    )
-                success_count += 1
-                file_success_count += 1
-            except Exception as e:
-                exception_tuple = (count, title, e, traceback.format_exc())
-                errors.append(exception_tuple)
-                logger.error(f"Error: {exception_tuple}", e)
-
-            if (success_count+len(errors)) % 50 == 0:
-                logger.info(f"{count}, {filename}, {title}")
-                if isinstance(push_to, str) and push_to.endswith(".jsonl"):
-                    with open(push_to, "a") as fp:
-                        fp.writelines(patent_dumps_list)
-                    patent_dumps_list = []
-                elif isinstance(push_to, PGDBInterface):
-                    push_to.commit_to_db()
-            count += 1
+        batch_count, batch_success_count, batch_errors = load_from_data(
+            xml_text,
+            filename,
+            push_to,
+            max_patents=limit_per_file,
+            keep_log=keep_log,
+        )
+        count += batch_count
+        success_count += batch_success_count
+        errors += batch_errors
 
     if errors:
         logger.error("\n\nErrors\n------------------------\n")
