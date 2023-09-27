@@ -7,7 +7,7 @@ import os
 import re
 import sys
 import traceback
-from typing import Union
+from typing import Union, Callable
 
 from bs4 import BeautifulSoup
 import psycopg2.extras
@@ -345,7 +345,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     return uspto_patent
 
 
-def write_patent_to_db(uspto_patent, db=None):
+def write_patent_to_db(patents, patent_table_name, db=None):
 
     """
     import pprint
@@ -364,91 +364,84 @@ def write_patent_to_db(uspto_patent, db=None):
                 print("--------------------------------")
     """
 
-    # Will use for created_at & updated_at time
-    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    # INSERTS INTO DB
-    uspto_db_entry = [
-        uspto_patent['publication_title'],
-        uspto_patent['publication_number'],
-        uspto_patent['publication_date'],
-        uspto_patent['application_type'],
-        uspto_patent['grant_date'],
-        uspto_patent['application_num'],
-        uspto_patent['application_date'],
-        ','.join(uspto_patent['authors']),
-        ','.join(uspto_patent['organizations']),
-        ','.join(uspto_patent['attorneys']),
-        ','.join(uspto_patent['attorney_organizations']),
-        ','.join(uspto_patent['sections']),
-        ','.join(uspto_patent['section_classes']),
-        ','.join(uspto_patent['section_class_subclasses']),
-        ','.join(uspto_patent['section_class_subclass_groups']),
-        '\n'.join(uspto_patent['abstract']),
-        '\n'.join(uspto_patent['descriptions']),
-        '\n'.join(uspto_patent['claims']),
-        current_time,
-        current_time
-    ]
-
-    # ON CONFLICT UPDATES TO DB
-    uspto_db_entry += [
-        uspto_patent['publication_title'],
-        uspto_patent['publication_date'],
-        uspto_patent['application_type'],
-        uspto_patent['grant_date'],
-        uspto_patent['application_num'],
-        uspto_patent['application_date'],
-        ','.join(uspto_patent['authors']),
-        ','.join(uspto_patent['organizations']),
-        ','.join(uspto_patent['attorneys']),
-        ','.join(uspto_patent['attorney_organizations']),
-        ','.join(uspto_patent['sections']),
-        ','.join(uspto_patent['section_classes']),
-        ','.join(uspto_patent['section_class_subclasses']),
-        ','.join(uspto_patent['section_class_subclass_groups']),
-        '\n'.join(uspto_patent['abstract']),
-        '\n'.join(uspto_patent['descriptions']),
-        '\n'.join(uspto_patent['claims']),
-        current_time
-    ]
-
     db_cursor = None
     if db is not None:
         db_cursor = db.obtain_db_cursor()
 
-    if db_cursor is not None:
+    if db_cursor is None:
+        return
 
-        db_cursor.execute("INSERT INTO uspto_patents ("
-                          + "publication_title, publication_number, "
-                          + "publication_date, publication_type, "
-                          + "grant_date, application_num, application_date, "
-                          + "authors, organizations, attorneys, attorney_organizations, "
-                          + "sections, section_classes, section_class_subclasses, "
-                          + "section_class_subclass_groups, "
-                          + "abstract, description, claims, "
-                          + "created_at, updated_at"
-                          + ") VALUES ("
-                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                          + "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                          + "ON CONFLICT(publication_number) "
-                          + "DO UPDATE SET "
-                          + "publication_title=%s, "
-                          + "publication_date=%s, "
-                          + "publication_type=%s, "
-                          + "grant_date=%s, "
-                          + "application_num=%s, "
-                          + "application_date=%s, "
-                          + "authors=%s, "
-                          + "organizations=%s, "
-                          + "attorneys=%s, "
-                          + "attorney_organizations=%s, "
-                          + "sections=%s, section_classes=%s, "
-                          + "section_class_subclasses=%s, "
-                          + "section_class_subclass_groups=%s, "
-                          + "abstract=%s, description=%s, "
-                          + "claims=%s, updated_at=%s", uspto_db_entry)
-        logger.debug(f"DB UPSERT message: {db_cursor.statusmessage}")
+    columns = [
+        "publication_title",
+        "publication_number",
+        "publication_date",
+        "publication_type",
+        "grant_date",
+        "application_num",
+        "application_date",
+        "authors",
+        "organizations",
+        "attorneys",
+        "attorney_organizations",
+        "sections",
+        "section_classes",
+        "section_class_subclasses",
+        "section_class_subclass_groups",
+        "abstract",
+        "descriptions",
+        "claims",
+        "created_at",
+        "updated_at",
+    ]
+    read_only_cols = {"created_at"}
+    conflict_columns = {"publication_number"}
+    updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
+
+    def tuple_creator(values):
+        n_values = len(values)
+        format_str = ', '.join(["\"{}\""] * n_values)
+        return f"({format_str})".format(*values)
+
+    def jsonify_dicts(value):
+        if isinstance(value, dict):
+            return json.dumps(value)
+        return value
+
+    def get_data_for_column(data, column):
+        if column in ["created_at", "updated_at"]:
+            return current_time
+        elif column in ["publication_type"]:
+            return data.get("application_type")
+        elif column in ["abstract", "descriptions", "claims"]:
+            return '\n'.join(data.get(column))
+        elif column in [
+            "authors", "organizations", "attorneys", "attorney_organizations",
+            "sections", "section_classes", "section_class_subclasses",
+            "section_class_subclass_groups",
+        ]:
+            return ','.join(data.get(column))
+        return data.get(column)
+
+    exclude_set_string = "({})".format(", ".join([
+        "EXCLUDED.{:s}".format(col) for col in updateable_cols
+    ]))
+
+    # Will use for created_at & updated_at time
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    psycopg2.extras.execute_values(
+        db_cursor,
+        f"""INSERT INTO {patent_table_name} {tuple_creator(columns)}
+                VALUES
+                    %s
+                ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
+                SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
+        [
+            [ jsonify_dicts(get_data_for_column(data, column)) for column in columns ]
+                for data in patents
+        ]
+    )
+    logger.debug(f"DB UPSERT message: {db_cursor.statusmessage}")
     return
 
 
@@ -517,31 +510,17 @@ def write_referential_documents_to_db(document_list, db=None):
     return
 
 
-def load_from_data(
-        xml_text: str,
-        filename: str,
-        push_to: str | PGDBInterface,
-        max_patents: int | None = None,
+def load_batch_from_data(
+        xml_text_list: list[str],
         keep_log: bool = False
     ):
 
     count = 0
     success_count = 0
     errors = []
-    patent_dumps_list = []
+    patent_list = []
 
-    xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-    for patent in xml_splits:
-        if max_patents and success_count >= max_patents:
-            if success_count:
-                logger.info(f"{count}, {filename}, {title}")
-                if isinstance(push_to, str) and push_to.endswith(".jsonl"):
-                    with open(push_to, "a") as fp:
-                        fp.writelines(patent_dumps_list)
-                    patent_dumps_list = []
-                elif isinstance(push_to, PGDBInterface):
-                    push_to.commit_to_db()
-            break
+    for patent in xml_text_list:
 
         if patent is None or patent == "":
             continue
@@ -566,53 +545,71 @@ def load_from_data(
                 bs=application,
                 keep_log=keep_log
             )
-            if isinstance(push_to, str) and push_to.endswith(".jsonl"):
-                patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
-            elif isinstance(push_to, PGDBInterface):
-                write_patent_to_db(uspto_patent, db=push_to)
-                write_referential_documents_to_db(
-                    uspto_patent["referential_documents"], db=push_to
-                )
+            patent_list.append(uspto_patent)
             success_count += 1
         except Exception as e:
             exception_tuple = (count, title, e, traceback.format_exc())
             errors.append(exception_tuple)
             logger.error(f"Error: {exception_tuple}", e)
-
-        if (success_count+len(errors)) % 50 == 0:
-            logger.info(f"{count}, {filename}, {title}")
-            if isinstance(push_to, str) and push_to.endswith(".jsonl"):
-                with open(push_to, "a") as fp:
-                    fp.writelines(patent_dumps_list)
-                patent_dumps_list = []
-            elif isinstance(push_to, PGDBInterface):
-                push_to.commit_to_db()
-
         count += 1
+
+    return count, success_count, patent_list, errors
+
+
+def load_from_data(
+        xml_text: str,
+        filename: str,
+        push_to_func: Callable,
+        batch_size: int = 50,
+        max_patents: int | None = None,
+        keep_log: bool = False
+    ):
+
+    count = 0
+    success_count = 0
+    errors = []
+
+    xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+    for i in range(0, len(xml_splits), batch_size):
+
+        last_index = i + batch_size
+        if max_patents:
+            last_index = min(max_patents, i + batch_size)
+
+        xml_batch = xml_splits[i : last_index]
+        batch_count, batch_success_count, patents, batch_errors = \
+            load_batch_from_data(xml_batch, keep_log)
+        count += batch_count
+
+        recent_title = None
+        if len(patents):
+            recent_title = patents[0].get("publication_title")
+
+        try:
+            push_to_func(patents)
+            logger.info(f"{count}, {filename}, {recent_title}")
+        except Exception as e:
+            exception_tuple = (count, recent_title, e, traceback.format_exc())
+            errors.append(exception_tuple)
+            logger.error(f"Error: {exception_tuple}", e)
+            batch_success_count = 0
+
+        success_count += batch_success_count
+        errors += batch_errors
 
     return count, success_count, errors
 
 
 def load_local_files(
         dirpath_list:  list,
+        push_to_func: Callable,
         limit_per_file: Union[int, None] = None,
-        push_to: Union[str, PGDBInterface] = "db",
+        batch_size: int = 50,
         keep_log: bool = False,
 ):
     """Load all files from local directory"""
     logger.info("LOADING FILES TO PARSE\n----------------------------")
     filenames = get_filenames_from_dir(dirpath_list)
-
-    if (
-        not (isinstance(push_to, str) and push_to.endswith('.jsonl'))
-            and not isinstance(push_to, PGDBInterface)
-    ):
-        push_to_error = (
-            f"push_to: `{str(push_to)}` is not valid."
-            " must be a str ending in 'jsonl' or a PGDBInterface."
-        )
-        logger.error(push_to_error)
-        raise ValueError(push_to_error)
 
     count = 0
     success_count = 0
@@ -627,7 +624,8 @@ def load_local_files(
         batch_count, batch_success_count, batch_errors = load_from_data(
             xml_text,
             filename,
-            push_to,
+            push_to_func,
+            batch_size,
             max_patents=limit_per_file,
             keep_log=keep_log,
         )
@@ -642,7 +640,43 @@ def load_local_files(
     logger.info("=" * 50)
     logger.info("=" * 50)
     logger.info(f"Success Count: {success_count}")
-    logger.info(f"Error Count: {len(errors)}")
+    logger.info(f"Error Count: {count - success_count}")
+
+
+def push_to_jsonl(patents: list[dict], push_to: str):
+    patent_dumps_list = []
+    for uspto_patent in patents:
+        patent_dumps_list.append(json.dumps(uspto_patent) + "\n")
+    with open(push_to, "a") as fp:
+        fp.writelines(patent_dumps_list)
+
+
+def push_to_db(
+        patents: list[dict],
+        push_to: PGDBInterface,
+        patent_table_name: str,
+        include_referential: bool = True,
+    ):
+    write_patent_to_db(patents, patent_table_name, db=push_to)
+    if include_referential:
+        for uspto_patent in patents:
+            write_referential_documents_to_db(
+                uspto_patent["referential_documents"], db=push_to
+            )
+
+
+def get_dump_function(push_to, *args, **kwargs):
+    if isinstance(push_to, str) and push_to.endswith(".jsonl"):
+        return lambda x: push_to_jsonl(x, push_to)
+    elif isinstance(push_to, PGDBInterface):
+        return lambda x: push_to_db(x, push_to, *args, **kwargs)
+    else:
+        push_to_error = (
+            f"push_to: `{str(push_to)}` is not valid."
+            " must be a str ending in 'jsonl' or a PGDBInterface."
+        )
+        logger.error(push_to_error)
+        raise ValueError(push_to_error)
 
 
 if __name__ == "__main__":
@@ -654,10 +688,18 @@ if __name__ == "__main__":
     _db = PGDBInterface(config_file=_db_config_file)
     _db.silent_logging = True
     _push_to = _db
+    _patent_table_name = "uspto_patents"
+
+    _push_to_func = get_dump_function(
+        _push_to,
+        patent_table_name=_patent_table_name,
+        include_referential=True
+    )
 
     load_local_files(
         dirpath_list=_arg_filenames,
+        push_to_func=_push_to_func,
+        batch_size=50,
         limit_per_file=None,
-        push_to=_push_to,
         keep_log=False,
     )
