@@ -601,6 +601,9 @@ def load_from_data(
         success_count += batch_success_count
         errors += batch_errors
 
+        if count >= max_patents:
+            break
+
     return count, success_count, errors
 
 
