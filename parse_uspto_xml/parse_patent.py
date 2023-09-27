@@ -388,7 +388,7 @@ def write_patent_to_db(patents, patent_table_name, db=None):
         "section_class_subclasses",
         "section_class_subclass_groups",
         "abstract",
-        "descriptions",
+        "description",
         "claims",
         "created_at",
         "updated_at",
@@ -412,7 +412,9 @@ def write_patent_to_db(patents, patent_table_name, db=None):
             return current_time
         elif column in ["publication_type"]:
             return data.get("application_type")
-        elif column in ["abstract", "descriptions", "claims"]:
+        elif column in ["abstract", "description", "claims"]:
+            if column == "description":
+                column = "descriptions"
             return '\n'.join(data.get(column))
         elif column in [
             "authors", "organizations", "attorneys", "attorney_organizations",
@@ -570,6 +572,8 @@ def load_from_data(
     errors = []
 
     xml_splits = xml_text.split("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+    if len(xml_splits) and not xml_splits[0]:
+        xml_splits = xml_splits[1:]
     for i in range(0, len(xml_splits), batch_size):
 
         last_index = i + batch_size
