@@ -550,9 +550,9 @@ def load_batch_from_data(
             patent_list.append(uspto_patent)
             success_count += 1
         except Exception as e:
-            exception_tuple = (count, title, e, traceback.format_exc())
+            exception_tuple = (count, title, e)
             errors.append(exception_tuple)
-            logger.error(f"Error: {exception_tuple}", e)
+            logger.error(f"Error: {exception_tuple}", exc_info=True)
         count += 1
 
     return count, success_count, patent_list, errors
@@ -593,9 +593,9 @@ def load_from_data(
             push_to_func(patents)
             logger.info(f"{count}, {filename}, {recent_title}")
         except Exception as e:
-            exception_tuple = (count, recent_title, e, traceback.format_exc())
+            exception_tuple = (count, recent_title, e)
             errors.append(exception_tuple)
-            logger.error(f"Error: {exception_tuple}", e)
+            logger.error(f"Error: {exception_tuple}", exc_info=True)
             batch_success_count = 0
 
         success_count += batch_success_count

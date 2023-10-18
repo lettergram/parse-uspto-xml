@@ -128,10 +128,11 @@ $$;
 
 **Optional indexes to improve search speeds (text searches)**
 ```
-CREATE INDEX idx_sections ON uspto_patents USING GIN (sections);
-CREATE INDEX idx_section_classes ON uspto_patents USING GIN (section_classes);
-CREATE INDEX idx_section_class_subclasses ON uspto_patents USING GIN (section_class_subclasses);
-CREATE INDEX idx_section_class_subclass_groups ON uspto_patents USING GIN (section_class_subclass_groups);
+CREATE INDEX IF NOT EXISTS idx_sections ON uspto_patents USING GIN (sections);
+CREATE INDEX IF NOT EXISTS idx_section_classes ON uspto_patents USING GIN (section_classes);
+CREATE INDEX IF NOT EXISTS idx_section_class_subclasses ON uspto_patents USING GIN (section_class_subclasses);
+CREATE INDEX IF NOT EXISTS idx_section_class_subclass_groups ON uspto_patents USING GIN (section_class_subclass_groups);
+CREATE INDEX IF NOT EXISTS reference ON uspto_referential_documents (reference);
 ```
 
 **Database Size**
