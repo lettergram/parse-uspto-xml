@@ -6,7 +6,6 @@ import json
 import os
 import re
 import sys
-import traceback
 from typing import Union, Callable
 
 from bs4 import BeautifulSoup
@@ -73,8 +72,11 @@ def parse_uspto_file(bs, keep_log: bool = False):
             "kind": None,
             "metadata": {}
         }
-        if related_doc_bs.name in ["continuation", "division", "continuation-in-part", "reissue", "substitution"]:
-            related_doc["document_type"] = related_doc_bs.name
+        if related_doc_bs.name in ["continuation", "division", "continuation-in-part", "reissue", "substitution", "us-reexamination-reissue-merger"]:
+            document_type = related_doc_bs.name
+            if document_type == "us-reexamination-reissue-merger":
+                document_type = "reissue"
+            related_doc["document_type"] = document_type
             related_doc["cited_by_examiner"] = False
             for documents_bs in related_doc_bs.find_all(re.compile("(parent|child)-doc(ument)?$")):
                 for doc_bs in documents_bs.find_all("document-id"):
