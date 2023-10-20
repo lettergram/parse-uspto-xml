@@ -74,7 +74,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
         }
         if related_doc_bs.name in ["continuation", "division", "continuation-in-part", "reissue", "substitution", "us-reexamination-reissue-merger"]:
             document_type = related_doc_bs.name
-            if document_type == "us-reexamination-reissue-merger":
+            if document_type in ["us-reexamination-reissue-merger", "continuing-reissue"]:
                 document_type = "reissue"
             related_doc["document_type"] = document_type
             related_doc["cited_by_examiner"] = False
