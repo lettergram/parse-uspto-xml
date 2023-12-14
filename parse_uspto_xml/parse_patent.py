@@ -48,10 +48,12 @@ def parse_uspto_file(bs, keep_log: bool = False):
     Parses a USPTO patent in a BeautifulSoup object.
     """
 
-    grant_date = bs.get("date-produced", None)
+    grant_date = None
+    publication_num = bs['file'].split("-")[0]
+    if bs.name == ('us-patent-grant'):
+        grant_date = bs.get("date-produced", None)
 
     publication_title = bs.find('invention-title').text
-    publication_num = bs['file'].split("-")[0]
     publication_date = bs.find('publication-reference').find('date').text
     application_ref_bs = bs.find('application-reference')
     application_type = application_ref_bs['appl-type']
@@ -201,6 +203,36 @@ def parse_uspto_file(bs, keep_log: bool = False):
             section_class_subclasses[classification] = True
             section_class_subclass_groups[classification+" "+group] = True
 
+    if not sections:
+        re_classification = re.compile(
+            "(?P<section>[A-Z])"
+            + "(?P<class>[0-9]{2})"
+            + "(?P<subclass>[A-Z])"
+            + "\s?(?P<maingroup>[0-9]{1,4})"
+            + "\s?/\s?"
+            + "(?P<subgroup>[0-9]{2,6})"
+        )
+        re_classification_tag = re.compile(
+            "(classification-ipc(r)?)|(classification-cpc(-text)?)"
+        )
+        for classes in bs.find_all(re.compile("us-bibliographic-data-(grant|application)")):
+            for el in classes.find_all(re_classification_tag):
+                if "citation" in el.parent.name:
+                    continue  # skip anything that's not the patent itself
+                classification = getattr(el.find('main-classification'), "text", el.text)
+                re_value = re_classification.match(classification)
+                if re_value is not None:
+                    section = re_value.group("section")
+                    section_class = section + re_value.group("class")
+                    section_subclass = section_class + re_value.group("subclass")
+
+                    group = re_value.group("maingroup") + "/" + re_value.group("subgroup")
+
+                    sections[section] = True
+                    section_classes[section_class] = True
+                    section_class_subclasses[section_subclass] = True
+                    section_class_subclass_groups[section_subclass + " " + group] = True
+
     def build_name(bs_el):
         """Creates a name '<First> <Last>'"""
         # [First Name, Last Name]
@@ -232,7 +264,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     attorneys = []
     attorney_organizations = []
     for parties in bs.find_all(re.compile('^.*parties')):
-        for inventors in parties.find_all(re.compile('inventors')):
+        for inventors in parties.find_all(re.compile('inventors|applicants')):
             for el in inventors.find_all('addressbook'):
                 # inventor_name: " ".join([first, last])
                 inventor_name = build_name(el)
