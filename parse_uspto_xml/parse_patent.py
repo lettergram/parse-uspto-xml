@@ -58,7 +58,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     application_ref_bs = bs.find('application-reference')
     application_type = application_ref_bs['appl-type']
     application_date = application_ref_bs.find('date').text
-    application_num = application_ref_bs.find('doc-number').text
+    application_number = application_ref_bs.find('doc-number').text
 
     referential_documents = []
     # {uspto_patents.publication_number,reference,cited_by_examiner,document_type,country,metadata (JSON)
@@ -67,6 +67,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     for related_doc_bs in (related_docs_bs.find_all(recursive=False) if related_docs_bs else []):
         related_doc = {
             "uspto_publication_number": publication_num,
+            "application_number": application_number,
             "reference": None,
             "cited_by_examiner": None,
             "document_type": None,
@@ -120,6 +121,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
             if doc_bs:
                 reference = {
                     "uspto_publication_number": publication_num,
+                    "application_number": application_number,
                     "reference": doc_bs.find("doc-number").text,
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
                     "document_type": "patent-reference",
@@ -308,9 +310,10 @@ def parse_uspto_file(bs, keep_log: bool = False):
         "publication_number": publication_num,
         "publication_date": publication_date,
         "grant_date": grant_date,
-        "application_num": application_num,
+        "application_number": application_number,
         "application_type": application_type,
         "application_date": application_date,
+        "patent_office": "uspto",
         "authors": authors, # list
         "organizations": organizations, # list
         "attorneys": attorneys, # list
@@ -411,8 +414,9 @@ def write_patent_to_db(patents, patent_table_name, db=None):
         "publication_date",
         "publication_type",
         "grant_date",
-        "application_num",
+        "application_number",
         "application_date",
+        "patent_office",
         "authors",
         "organizations",
         "attorneys",
@@ -428,7 +432,7 @@ def write_patent_to_db(patents, patent_table_name, db=None):
         "updated_at",
     ]
     read_only_cols = {"created_at"}
-    conflict_columns = {"publication_number"}
+    conflict_columns = {"application_number"}
     updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
 
     def tuple_creator(values):
