@@ -45,7 +45,6 @@ GRANT ALL PRIVILEGES ON DATABASE uspto_patents TO patent_manager;
 **Create table**
 ```
 CREATE TABLE uspto_patents(
-       patent_office VARCHAR,
        publication_number VARCHAR,
        publication_title VARCHAR,
        publication_date DATE,
@@ -53,6 +52,8 @@ CREATE TABLE uspto_patents(
        grant_date DATE,
        application_num VARCHAR,
        application_date DATE,
+       application_status VARCHAR,
+       patent_office VARCHAR,
        authors VARCHAR,
        organizations VARCHAR,
        attorneys VARCHAR,
@@ -87,6 +88,9 @@ BEGIN
     END IF;
 END
 $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS patent_constraint on uspto_patents
+    (application_number, patent_office);
 
 CREATE TABLE IF NOT EXISTS uspto_referential_documents(
    id SERIAL PRIMARY KEY,
