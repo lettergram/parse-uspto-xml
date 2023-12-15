@@ -419,6 +419,7 @@ def write_patent_to_db(patents, patent_table_name, db=None):
         "grant_date",
         "application_number",
         "application_date",
+        "application_status",
         "patent_office",
         "authors",
         "organizations",
