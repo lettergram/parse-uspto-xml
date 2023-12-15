@@ -9,3 +9,5 @@ venv/
 logs/*
 data/*
 .env
+data/*
+.DS_Store

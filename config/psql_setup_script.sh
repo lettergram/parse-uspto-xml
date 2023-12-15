@@ -14,8 +14,9 @@ CREATE TABLE IF NOT EXISTS uspto_patents(
        publication_date DATE,
        publication_type VARCHAR,
        grant_date DATE,
-       application_num VARCHAR,
+       application_number VARCHAR,
        application_date DATE,
+       patent_office VARCHAR,
        authors VARCHAR,
        organizations VARCHAR,
        attorneys VARCHAR,
@@ -29,7 +30,7 @@ CREATE TABLE IF NOT EXISTS uspto_patents(
        claims TEXT,
        created_at TIMESTAMP without time zone,
        updated_at TIMESTAMP without time zone,
-       PRIMARY KEY(publication_number)
+       PRIMARY KEY(application_number)
 );
 
 CREATE INDEX IF NOT EXISTS idx_publication_date ON uspto_patents (publication_date);
@@ -74,7 +75,7 @@ BEGIN
     IF (select Substr(setting, 1, strpos(setting, '.')-1) from pg_settings where name = 'server_version')::INTEGER = 15 THEN
         --FOR PSQL >= 15 which allows null not distinct
         --CREATE UNIQUE INDEX IF NOT EXISTS patent_reference_constraint on uspto_referential_documents
-        --    (uspto_publication_number, reference, document_type, country, (kind)) NULLS NOT DISTINCT;
+        --    (uspto_publication_number, application_number, reference, document_type, country, (kind)) NULLS NOT DISTINCT;
         RAISE WARNING 'UNCOMMENT THIS SECTION FOR PSQL>=15; NO INDEXES APPLIED';
     ELSE
         --FOR PSQL < 15
