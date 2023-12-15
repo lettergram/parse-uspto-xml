@@ -48,6 +48,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     Parses a USPTO patent in a BeautifulSoup object.
     """
 
+    patent_office = "uspto"
     grant_date = None
     publication_num = bs['file'].split("-")[0]
     application_status = "pending"
@@ -68,7 +69,8 @@ def parse_uspto_file(bs, keep_log: bool = False):
     related_docs_bs = bs.find("us-related-documents")
     for related_doc_bs in (related_docs_bs.find_all(recursive=False) if related_docs_bs else []):
         related_doc = {
-            "uspto_publication_number": publication_num,
+            "publication_number": publication_num,
+            "patent_office": patent_office,
             "application_number": application_number,
             "reference": None,
             "cited_by_examiner": None,
@@ -122,7 +124,8 @@ def parse_uspto_file(bs, keep_log: bool = False):
             doc_bs = ref_bs.find("document-id")
             if doc_bs:
                 reference = {
-                    "uspto_publication_number": publication_num,
+                    "publication_number": publication_num,
+                    "patent_office": patent_office,
                     "application_number": application_number,
                     "reference": doc_bs.find("doc-number").text,
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
@@ -136,7 +139,9 @@ def parse_uspto_file(bs, keep_log: bool = False):
                 }
             else:
                 reference = {
-                    "uspto_publication_number": publication_num,
+                    "publication_number": publication_num,
+                    "patent_office": patent_office,
+                    "application_number": application_number,
                     "reference": ref_bs.find("othercit").text,
                     "cited_by_examiner": "examiner" in ref_bs.find("category").text,
                     "document_type": "other-reference",
@@ -152,7 +157,9 @@ def parse_uspto_file(bs, keep_log: bool = False):
     if priority_docs_bs:
         for doc_bs in priority_docs_bs.find_all("priority-claim"):
             priority_claims.append({
-                "uspto_publication_number": publication_num,
+                "publication_number": publication_num,
+                "patent_office": patent_office,
+                "application_number": application_number,
                 "reference": doc_bs.find("doc-number").text,
                 "cited_by_examiner": False,
                 "document_type": "other-reference",
@@ -167,7 +174,8 @@ def parse_uspto_file(bs, keep_log: bool = False):
     # check to make sure all keys are proper -- TODO: this should be a test.
     for reference in referential_documents:
         expected_keys = {
-            "uspto_publication_number",
+            "publication_number",
+            "patent_office",
             "application_number",
             "reference",
             "cited_by_examiner",
@@ -317,7 +325,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
         "application_type": application_type,
         "application_date": application_date,
         "application_status": application_status,
-        "patent_office": "uspto",
+        "patent_office": patent_office,
         "authors": authors, # list
         "organizations": organizations, # list
         "attorneys": attorneys, # list
