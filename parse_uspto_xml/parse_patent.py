@@ -50,8 +50,10 @@ def parse_uspto_file(bs, keep_log: bool = False):
 
     grant_date = None
     publication_num = bs['file'].split("-")[0]
+    application_status = "pending"
     if bs.name == ('us-patent-grant'):
         grant_date = bs.get("date-produced", None)
+        application_status = "granted"
 
     publication_title = bs.find('invention-title').text
     publication_date = bs.find('publication-reference').find('date').text
@@ -313,6 +315,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
         "application_number": application_number,
         "application_type": application_type,
         "application_date": application_date,
+        "application_status": application_status,
         "patent_office": "uspto",
         "authors": authors, # list
         "organizations": organizations, # list
