@@ -432,7 +432,7 @@ def write_patent_to_db(patents, patent_table_name, db=None):
         "updated_at",
     ]
     read_only_cols = {"created_at"}
-    conflict_columns = {"application_number"}
+    conflict_columns = {"application_number", "patent_office"}
     updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
 
     def tuple_creator(values):
