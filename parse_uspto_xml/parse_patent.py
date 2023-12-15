@@ -168,6 +168,7 @@ def parse_uspto_file(bs, keep_log: bool = False):
     for reference in referential_documents:
         expected_keys = {
             "uspto_publication_number",
+            "application_number",
             "reference",
             "cited_by_examiner",
             "document_type",
