@@ -45,6 +45,7 @@ GRANT ALL PRIVILEGES ON DATABASE uspto_patents TO patent_manager;
 **Create table**
 ```
 CREATE TABLE uspto_patents(
+       patent_office VARCHAR,
        publication_number VARCHAR,
        publication_title VARCHAR,
        publication_date DATE,
