@@ -447,6 +447,7 @@ def write_patent_to_db(patents, patent_table_name, db=None):
     read_only_cols = {"created_at"}
     conflict_columns = {"application_number", "patent_office"}
     updateable_cols = set(columns).difference(conflict_columns).difference(read_only_cols)
+    newer_than_col = "publication_date"
 
     def tuple_creator(values):
         n_values = len(values)
@@ -478,6 +479,9 @@ def write_patent_to_db(patents, patent_table_name, db=None):
     exclude_set_string = "({})".format(", ".join([
         "EXCLUDED.{:s}".format(col) for col in updateable_cols
     ]))
+    newer_than_only = ""
+    if newer_than_col:
+        newer_than_only = f"WHERE EXCLUDED.{newer_than_col} > {patent_table_name}.{newer_than_col}"
 
     # Will use for created_at & updated_at time
     current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -488,7 +492,8 @@ def write_patent_to_db(patents, patent_table_name, db=None):
                 VALUES
                     %s
                 ON CONFLICT {tuple_creator(conflict_columns)} DO UPDATE
-                SET {tuple_creator(updateable_cols)} = {exclude_set_string}""",
+                SET {tuple_creator(updateable_cols)} = {exclude_set_string}
+                {newer_than_only}""",
         [
             [ jsonify_dicts(get_data_for_column(data, column)) for column in columns ]
                 for data in patents
